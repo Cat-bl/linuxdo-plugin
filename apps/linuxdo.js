@@ -449,9 +449,10 @@ export default class LinuxDoApp extends plugin {
         logger.error(`[linuxdo-plugin] 获取 ${username} RSS 失败: ${err.message}`)
         rssCache.set(username, []) // 失败时设为空数组
       }
-      // 请求间隔 15-20 秒（最后一个不等待）
-      if (i < usernameArray.length - 1) {
-        await this.sleep(15000 + Math.random() * 5000)
+      // 请求间隔（最后一个不等待）
+      const delay = config.requestDelay ?? 15
+      if (delay > 0 && i < usernameArray.length - 1) {
+        await this.sleep(delay * 1000 + Math.random() * 5000)
       }
     }
 
