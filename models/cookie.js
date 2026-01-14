@@ -221,8 +221,9 @@ async function autoLogin(page, username, password) {
 }
 
 /**
- * 从浏览器获取 linux.do 的 Cookie
+ * 从浏览器获取 linux.do 的 Cookie 和 User-Agent
  * @param {boolean} refresh 是否刷新页面
+ * @returns {Promise<{cookie: string, userAgent: string}|null>}
  */
 export async function fetchCookieFromBrowser(refresh = false) {
   if (!browser) {
@@ -241,8 +242,16 @@ export async function fetchCookieFromBrowser(refresh = false) {
       await new Promise(r => setTimeout(r, 3000))
     }
 
-    // 获取 Cookie
+    // 获取 Cookie（包括 Cloudflare 的 cf_clearance）
     const cookies = await page.cookies()
+
+    // 获取 User-Agent
+    const userAgent = await page.evaluate(() => navigator.userAgent)
+
+    // 打印所有 Cookie 域名用于调试
+    const domains = [...new Set(cookies.map(c => c.domain))]
+    logger.info(`[linuxdo-plugin] Cookie 域名: ${domains.join(', ')}`)
+
     const cookieStr = cookies
       .filter(c => c.domain.includes('linux.do'))
       .map(c => `${c.name}=${c.value}`)
@@ -254,7 +263,8 @@ export async function fetchCookieFromBrowser(refresh = false) {
     }
 
     logger.info(`[linuxdo-plugin] 获取 Cookie 成功，长度: ${cookieStr.length}`)
-    return cookieStr
+    logger.info(`[linuxdo-plugin] 获取 User-Agent: ${userAgent.substring(0, 50)}...`)
+    return { cookie: cookieStr, userAgent }
   } catch (err) {
     logger.error(`[linuxdo-plugin] 获取 Cookie 失败: ${err.message}`)
     // 连接可能已断开，重置
@@ -265,17 +275,20 @@ export async function fetchCookieFromBrowser(refresh = false) {
 }
 
 /**
- * 更新配置文件中的 Cookie
+ * 更新配置文件中的 Cookie 和 User-Agent
  * @param {string} cookie 新的 Cookie 字符串
+ * @param {string} userAgent 新的 User-Agent 字符串（可选）
  */
-export function updateConfigCookie(cookie) {
+export function updateConfigCookie(cookie, userAgent = null) {
   try {
     const configContent = fs.readFileSync(CONFIG_PATH, 'utf-8')
     const lines = configContent.split('\n')
     const newLines = []
     let inCookie = false
+    let userAgentUpdated = false
 
     for (const line of lines) {
+      // 更新 cookie
       if (line.startsWith('cookie:')) {
         inCookie = true
         newLines.push('cookie: >-')
@@ -294,6 +307,13 @@ export function updateConfigCookie(cookie) {
         }
       }
 
+      // 更新 userAgent
+      if (userAgent && line.startsWith('userAgent:')) {
+        newLines.push(`userAgent: "${userAgent}"`)
+        userAgentUpdated = true
+        continue
+      }
+
       if (!inCookie) {
         newLines.push(line)
       }
@@ -301,6 +321,9 @@ export function updateConfigCookie(cookie) {
 
     fs.writeFileSync(CONFIG_PATH, newLines.join('\n'))
     logger.info('[linuxdo-plugin] Cookie 已更新到配置文件')
+    if (userAgent && userAgentUpdated) {
+      logger.info('[linuxdo-plugin] User-Agent 已更新到配置文件')
+    }
     return true
   } catch (err) {
     logger.error(`[linuxdo-plugin] 更新配置文件失败: ${err.message}`)
@@ -349,13 +372,13 @@ export async function refreshCookie(refresh = false) {
       }
     }
 
-    // 获取并更新 Cookie
-    logger.info('[linuxdo-plugin] 正在从浏览器获取 Cookie...')
-    const cookie = await fetchCookieFromBrowser(false)
-    if (cookie) {
-      const result = updateConfigCookie(cookie)
+    // 获取并更新 Cookie 和 User-Agent
+    logger.info('[linuxdo-plugin] 正在从浏览器获取 Cookie 和 User-Agent...')
+    const data = await fetchCookieFromBrowser(false)
+    if (data) {
+      const result = updateConfigCookie(data.cookie, data.userAgent)
       if (result) {
-        logger.info('[linuxdo-plugin] Cookie 更新完成')
+        logger.info('[linuxdo-plugin] Cookie 和 User-Agent 更新完成')
       }
       return result
     }
