@@ -9,7 +9,7 @@
 - 自动检测帖子中的 CDK 链接并在推送中显示
 - 支持多群/多用户订阅，各群推送独立互不影响
 - 支持代理配置（适用于需要科学上网访问的情况）
-- 自动 Cookie 刷新：连接浏览器自动获取和更新 Cookie
+- 自动 Cookie 刷新：连接浏览器自动获取和更新 Cookie 和 User-Agent
 - 自动登录：Cookie 失效时自动使用配置的账号密码登录
 - 配置文件热加载，修改后无需重启机器人
 - 凌晨 3:00-5:59 休眠时段不执行推送
@@ -32,9 +32,12 @@ plugins/
     │   ├── rss.js        # 数据获取与解析
     │   ├── screenshot.js # 页面截图
     │   └── cookie.js     # Cookie 自动刷新
-    └── data/
-        ├── config.yaml   # 插件配置
-        └── push.yaml     # 订阅数据
+    ├── config_default/   # 默认配置模板（提交到 Git）
+    │   └── config.yaml
+    └── data/             # 运行时数据（不提交到 Git）
+        ├── config.yaml   # 用户配置
+        ├── push.yaml     # 订阅数据
+        └── browser-data/ # 浏览器数据
 ```
 
 ## 依赖
@@ -47,6 +50,8 @@ plugins/
 ## 配置
 
 配置文件位于 `plugins/linuxdo-plugin/data/config.yaml`，修改后自动生效。
+
+首次启动时会自动从 `config_default/config.yaml` 复制默认配置到 `data/config.yaml`。
 
 ```yaml
 # 是否启用推送
@@ -68,10 +73,10 @@ autoCookie:
   username: ""                    # linux.do 用户名或邮箱
   password: ""                    # linux.do 密码
 
-# User-Agent
-userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ..."
+# User-Agent（启用 autoCookie 时会自动从浏览器获取）
+userAgent: ""
 
-# Linux.do Cookie（自动刷新时会自动更新此字段）
+# Linux.do Cookie（启用 autoCookie 时会自动更新）
 cookie: >-
   你的cookie内容
 
@@ -86,13 +91,16 @@ proxy:
 
 启用 `autoCookie` 后，插件会：
 1. 启动时自动打开浏览器并连接
-2. 定时刷新页面获取最新 Cookie
+2. 定时刷新页面获取最新 Cookie 和 User-Agent
 3. 请求失败达到 `maxRetries` 次数后自动刷新 Cookie
 4. 检测到登录失效时自动使用配置的账号密码登录
+5. 自动同步浏览器的 User-Agent，确保与 Cookie 一致（避免 Cloudflare 403）
 
 **注意**：首次使用需要手动在浏览器中登录 linux.do，或配置 `username` 和 `password` 实现自动登录。
 
 ### Cookie 和 User-Agent 手动获取方法
+
+如果不使用 `autoCookie` 自动刷新功能，需要手动获取：
 
 1. 浏览器登录 https://linux.do
 2. 按 F12 打开开发者工具
@@ -101,7 +109,10 @@ proxy:
 5. 在 Request Headers 中找到 `Cookie` 和 `User-Agent`
 6. 复制到配置文件对应字段
 
-**注意**：Cookie 使用 `>-` 多行语法，可直接粘贴，无需引号。
+**注意**：
+- Cookie 使用 `>-` 多行语法，可直接粘贴，无需引号
+- Cookie 和 User-Agent 必须来自同一浏览器，否则可能触发 Cloudflare 403
+- 启用 `autoCookie` 后会自动获取，无需手动配置
 
 ### Cron 表达式示例
 
@@ -170,6 +181,8 @@ CDK链接：https://cdk.linux.do/xxx/xxx
 
 ## 数据存储
 
+- **默认配置**: `config_default/config.yaml` - 配置模板（提交到 Git）
+- **用户配置**: `data/config.yaml` - 用户配置（不提交到 Git，首次启动自动复制）
 - **订阅数据**: `data/push.yaml` - 存储群/私聊的订阅列表
 - **浏览器数据**: `data/browser-data/` - 独立的浏览器用户数据目录
 - **去重缓存**: Redis
