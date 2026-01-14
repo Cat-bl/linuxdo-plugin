@@ -133,7 +133,7 @@ proxy:
 |------|------|------|
 | `#订阅linuxdo 用户名` | 主人 | 订阅用户 |
 | `#取消订阅linuxdo 用户名` | 主人 | 取消订阅 |
-| `#linuxdo列表` | 所有人 | 查看当前订阅列表 |
+| `#linuxdo订阅列表` | 所有人 | 查看当前订阅列表 |
 | `#测试linuxdo推送` | 主人 | 测试推送功能（订阅用户最新帖子） |
 | `#测试linuxdo推送 帖子ID` | 主人 | 测试指定帖子的推送 |
 | `#重置linuxdo推送` | 主人 | 重置当前群全部推送记录 |
@@ -149,7 +149,7 @@ proxy:
 ```
 #订阅linuxdo neo
 #订阅linuxdo Cat-bl
-#linuxdo列表
+#linuxdo订阅列表
 #取消订阅linuxdo neo
 #测试linuxdo推送
 #测试linuxdo推送 1420507

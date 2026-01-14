@@ -147,7 +147,7 @@ export default class LinuxDoApp extends plugin {
           permission: 'master'
         },
         {
-          reg: '^#linuxdo列表$',
+          reg: '^#linuxdo订阅列表$',
           fnc: 'listSub'
         },
         {
