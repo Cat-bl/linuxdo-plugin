@@ -61,7 +61,7 @@ maxRetries: 20
 # 自动刷新 Cookie 配置
 autoCookie:
   enable: true                    # 是否启用自动刷新 Cookie
-  refreshInterval: 20             # Cookie 刷新间隔（分钟）
+  refreshInterval: 20             # Cookie 刷新间隔（分钟）,为0时禁用定时刷新
   browserPath: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"  # 浏览器路径
   debuggingPort: 9222             # 调试端口
   # 自动登录配置（登录失效时自动登录）
