@@ -228,7 +228,7 @@ CDK链接：https://cdk.linux.do/xxx/xxx
 
 访问用户主页，URL 中 `/u/` 后面的部分即为用户名：
 ```
-https://linux.do/u/kingsword09  →  用户名: kingsword09
+https://linux.do/u/neo  →  用户名: neo
 ```
 
 ### 5. 修改配置后需要重启吗
