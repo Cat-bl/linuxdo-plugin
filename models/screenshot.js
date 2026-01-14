@@ -200,8 +200,11 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
       const creator = userEl ? userEl.textContent.trim() : ''
 
       // 获取发帖时间
-      const timeEl = document.querySelector('.topic-post .post-date, .topic-post time')
-      const pubDate = timeEl ? (timeEl.getAttribute('datetime') || timeEl.textContent.trim()) : ''
+      const timeEl = document.querySelector('.topic-post time[datetime], .topic-post .relative-date')
+      let pubDate = ''
+      if (timeEl) {
+        pubDate = timeEl.getAttribute('datetime') || timeEl.getAttribute('data-time') || timeEl.title || ''
+      }
 
       return { cdkUrl, title, creator, pubDate }
     })

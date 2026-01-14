@@ -133,7 +133,7 @@ proxy:
 
 ```
 #订阅linuxdo neo
-#订阅linuxdo kingsword09
+#订阅linuxdo Cat-bl
 #linuxdo列表
 #取消订阅linuxdo neo
 #测试linuxdo推送
@@ -141,7 +141,7 @@ proxy:
 #重置linuxdo推送
 #重置linuxdo推送 neo
 #linuxdo标记已推送 1436129
-#linuxdo标记已推送 ouyangqiqi
+#linuxdo标记已推送 Cat-bl
 #linuxdo标记已推送 1436129 123456789
 #linuxdo清除全部推送
 #linuxdo连接浏览器
