@@ -1,6 +1,6 @@
 # linuxdo-plugin
 
-Linux.do 社区用户订阅推送插件，适用于 TRSS-Yunzai / Miao-Yunzai。
+自用Linux.do 社区用户订阅推送插件，适用于 TRSS-Yunzai / Miao-Yunzai。
 
 ## 功能
 
