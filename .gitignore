@@ -1,0 +1,14 @@
+# 用户配置（包含敏感信息）
+data/config.yaml
+
+# 订阅数据
+data/push.yaml
+
+# 浏览器数据目录
+data/browser-data/
+
+# Node modules
+node_modules/
+
+# 临时文件
+tmpclaude-*

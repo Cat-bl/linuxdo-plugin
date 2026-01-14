@@ -1,0 +1,7 @@
+{
+  "name": "linuxdo-plugin",
+  "version": "1.0.0",
+  "description": "Linux.do 社区用户订阅推送插件",
+  "author": "",
+  "type": "module"
+}
