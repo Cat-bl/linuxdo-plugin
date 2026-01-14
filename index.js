@@ -22,7 +22,7 @@ setTimeout(async () => {
       const success = await initAutoCookie(config)
 
       // 启动定时刷新 Cookie
-      if (success && config?.autoCookie?.enable) {
+      if (success && config?.autoCookie?.enable && config.autoCookie.refreshInterval > 0) {
         const minutes = config.autoCookie.refreshInterval || 20
         const interval = minutes * 60 * 1000
         cookieRefreshTimer = setInterval(async () => {
