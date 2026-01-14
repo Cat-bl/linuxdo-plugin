@@ -195,8 +195,9 @@ async function autoLogin(page, username, password) {
     // 点击登录按钮
     await page.click('#login-button')
 
-    // 等待登录完成
-    await new Promise(r => setTimeout(r, 5000))
+    // 等待登录完成（增加等待时间）
+    logger.info('[linuxdo-plugin] 等待登录完成...')
+    await new Promise(r => setTimeout(r, 8000))
 
     // 检查是否登录成功
     const loggedIn = await isLoggedIn(page)
@@ -206,7 +207,7 @@ async function autoLogin(page, username, password) {
       // 登录成功后跳转到配置的页面
       logger.info(`[linuxdo-plugin] 跳转到配置页面: ${DEFAULT_PAGE}`)
       await page.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
-      await new Promise(r => setTimeout(r, 3000))
+      await new Promise(r => setTimeout(r, 5000))
 
       return true
     } else {
@@ -341,6 +342,7 @@ export async function refreshCookie(refresh = false) {
         if (!loginSuccess) {
           return false
         }
+        logger.info('[linuxdo-plugin] 登录成功，正在获取新 Cookie...')
       } else {
         logger.warn('[linuxdo-plugin] 登录状态失效，但未配置账号密码')
         return false
@@ -348,10 +350,16 @@ export async function refreshCookie(refresh = false) {
     }
 
     // 获取并更新 Cookie
+    logger.info('[linuxdo-plugin] 正在从浏览器获取 Cookie...')
     const cookie = await fetchCookieFromBrowser(false)
     if (cookie) {
-      return updateConfigCookie(cookie)
+      const result = updateConfigCookie(cookie)
+      if (result) {
+        logger.info('[linuxdo-plugin] Cookie 更新完成')
+      }
+      return result
     }
+    logger.warn('[linuxdo-plugin] 未能获取到 Cookie')
     return false
   } catch (err) {
     logger.error(`[linuxdo-plugin] 刷新 Cookie 失败: ${err.message}`)
