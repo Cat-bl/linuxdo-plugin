@@ -192,7 +192,7 @@ export default class LinuxDoApp extends plugin {
           name: 'LinuxDo订阅推送定时任务',
           fnc: () => this.pushTask()
         }
-        : null
+        : undefined
     })
   }
 
@@ -403,6 +403,8 @@ export default class LinuxDoApp extends plugin {
       logger.info('[linuxdo-plugin] 当前为休眠时段(03:00-05:59)，跳过推送')
       return
     }
+
+    if(!this.config.pushStatus) return
 
     const pushData = getPushData()
     const config = getConfig()
