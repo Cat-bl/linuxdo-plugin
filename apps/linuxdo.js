@@ -318,7 +318,7 @@ export default class LinuxDoApp extends plugin {
     // 如果传入了帖子 ID，直接测试该帖子
     if (topicId) {
       try {
-        this.reply(`正在获取帖子 ${topicId} 并截图，请稍候...`)
+        this.reply(`正在获取帖子 ${topicId} 内容，请稍候...`)
         const url = `https://linux.do/t/topic/${topicId}`
         const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate } = await screenshotPost(url, this.config.proxy, this.config.cookie)
         const pubTime = pubDate ? formatTime(pubDate) : ''

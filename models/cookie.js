@@ -111,25 +111,47 @@ export async function disconnectBrowser() {
 }
 
 /**
- * 获取或创建 linux.do 页面
+ * 获取或创建 linux.do 页面（确保只有一个标签页）
  */
 async function getLinuxDoPage() {
   if (!browser) return null
 
   try {
-    // 查找已打开的 linux.do 页面
     const pages = await browser.pages()
+    let targetPage = null
+
+    // 查找 linux.do 页面，同时关闭多余的标签页
     for (const page of pages) {
       const url = page.url()
       if (url.includes('linux.do')) {
-        linuxDoPage = page
-        return linuxDoPage
+        if (!targetPage) {
+          targetPage = page
+        } else {
+          // 关闭多余的 linux.do 标签页
+          await page.close().catch(() => {})
+        }
+      } else if (url === 'about:blank' || url === 'chrome://newtab/') {
+        // 关闭空白标签页
+        await page.close().catch(() => {})
       }
     }
 
-    // 没有找到，打开新页面
-    linuxDoPage = await browser.newPage()
-    await linuxDoPage.goto('https://linux.do/', { waitUntil: 'domcontentloaded', timeout: 60000 })
+    if (targetPage) {
+      linuxDoPage = targetPage
+      return linuxDoPage
+    }
+
+    // 没有找到，使用现有页面或创建新页面
+    const remainingPages = await browser.pages()
+    if (remainingPages.length > 0) {
+      // 复用第一个标签页
+      linuxDoPage = remainingPages[0]
+      await linuxDoPage.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    } else {
+      // 创建新页面
+      linuxDoPage = await browser.newPage()
+      await linuxDoPage.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    }
     await new Promise(r => setTimeout(r, 5000))
     logger.info('[linuxdo-plugin] 已打开 linux.do 页面')
     return linuxDoPage
@@ -209,6 +231,9 @@ async function autoLogin(page, username, password) {
       await page.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
       await new Promise(r => setTimeout(r, 5000))
 
+      // 清理多余的标签页，只保留当前页面
+      await cleanupExtraTabs(page)
+
       return true
     } else {
       logger.error('[linuxdo-plugin] 自动登录失败，请检查账号密码')
@@ -217,6 +242,26 @@ async function autoLogin(page, username, password) {
   } catch (err) {
     logger.error(`[linuxdo-plugin] 自动登录失败: ${err.message}`)
     return false
+  }
+}
+
+/**
+ * 清理多余的标签页，只保留指定页面
+ * @param {Object} keepPage 要保留的页面
+ */
+async function cleanupExtraTabs(keepPage) {
+  if (!browser) return
+
+  try {
+    const pages = await browser.pages()
+    for (const page of pages) {
+      if (page !== keepPage) {
+        await page.close().catch(() => {})
+      }
+    }
+    logger.info('[linuxdo-plugin] 已清理多余标签页')
+  } catch (err) {
+    logger.error(`[linuxdo-plugin] 清理标签页失败: ${err.message}`)
   }
 }
 
