@@ -409,6 +409,88 @@ export default class LinuxDoApp extends plugin {
     const pushData = getPushData()
     const config = getConfig()
 
+    // 根据 batchPush 配置决定推送模式
+    if (config.batchPush) {
+      await this.pushTaskBatch(pushData, config)
+    } else {
+      await this.pushTaskImmediate(pushData, config)
+    }
+  }
+
+  /**
+   * 即时推送模式：获取一个用户数据后立即判断推送
+   */
+  async pushTaskImmediate(pushData, config) {
+    // 收集所有订阅的用户名及其对应的群/私聊（去重）
+    const userSubscriptions = new Map() // username -> [{chatType, chatId, sub}]
+    for (const chatType of ['group', 'private']) {
+      const chats = pushData[chatType] || {}
+      for (const [chatId, subs] of Object.entries(chats)) {
+        for (const sub of subs) {
+          if (!userSubscriptions.has(sub.username)) {
+            userSubscriptions.set(sub.username, [])
+          }
+          userSubscriptions.get(sub.username).push({ chatType, chatId, sub })
+        }
+      }
+    }
+
+    if (userSubscriptions.size === 0) return
+
+    const usernameArray = Array.from(userSubscriptions.keys())
+    let allCanCreateTopicFalse = true
+
+    for (let i = 0; i < usernameArray.length; i++) {
+      const username = usernameArray[i]
+      try {
+        const xml = await fetchRSS(username, config.proxy, config.maxRetries || 20, config.cookie, config.userAgent)
+        const { items, canCreateTopic } = parseRSS(xml)
+
+        if (!canCreateTopic) {
+          logger.warn(`[linuxdo-plugin] ${username} 数据非最新(can_create_topic=false)，跳过`)
+        } else {
+          allCanCreateTopicFalse = false
+          logger.info(`[linuxdo-plugin] 获取 ${username} RSS 成功`)
+
+          // 立即推送到所有订阅该用户的群/私聊
+          if (items.length > 0) {
+            const subscriptions = userSubscriptions.get(username)
+            for (const { chatType, chatId, sub } of subscriptions) {
+              try {
+                await this.checkAndPush(chatType, chatId, sub, config, items)
+              } catch (err) {
+                logger.error(`[linuxdo-plugin] 推送失败 ${username}: ${err.message}`)
+              }
+            }
+          }
+        }
+      } catch (err) {
+        if (err instanceof CookieRefreshedError) {
+          logger.info('[linuxdo-plugin] Cookie 已刷新，终止当前定时任务')
+          return
+        }
+        logger.error(`[linuxdo-plugin] 获取 ${username} RSS 失败: ${err.message}`)
+      }
+
+      // 请求间隔（最后一个不等待）
+      const delay = config.requestDelay ?? 15
+      if (delay > 0 && i < usernameArray.length - 1) {
+        await this.sleep(delay * 1000 + Math.random() * 5000)
+      }
+    }
+
+    // 如果所有用户的 canCreateTopic 都为 false，刷新 Cookie
+    if (allCanCreateTopicFalse && usernameArray.length > 0) {
+      logger.warn('[linuxdo-plugin] 所有用户数据都非最新，尝试刷新 Cookie...')
+      await refreshCookie(true)
+      logger.info('[linuxdo-plugin] Cookie 已刷新，终止当前定时任务')
+    }
+  }
+
+  /**
+   * 批量推送模式：先获取所有用户数据，再统一推送
+   */
+  async pushTaskBatch(pushData, config) {
     // 1. 收集所有订阅的用户名（去重）
     const allUsernames = new Set()
     for (const chatType of ['group', 'private']) {
@@ -425,7 +507,7 @@ export default class LinuxDoApp extends plugin {
     // 2. 统一请求每个用户的 RSS 数据
     const rssCache = new Map() // username -> items
     const usernameArray = Array.from(allUsernames)
-    let allCanCreateTopicFalse = true  // 跟踪是否所有用户的 canCreateTopic 都为 false
+    let allCanCreateTopicFalse = true
 
     for (let i = 0; i < usernameArray.length; i++) {
       const username = usernameArray[i]
@@ -433,23 +515,21 @@ export default class LinuxDoApp extends plugin {
         const xml = await fetchRSS(username, config.proxy, config.maxRetries || 20, config.cookie, config.userAgent)
         const { items, canCreateTopic } = parseRSS(xml)
 
-        // can_create_topic 为 false 或空时，数据不是最新的，跳过此用户
         if (!canCreateTopic) {
           logger.warn(`[linuxdo-plugin] ${username} 数据非最新(can_create_topic=false)，跳过`)
           rssCache.set(username, [])
         } else {
-          allCanCreateTopicFalse = false  // 至少有一个用户数据是最新的
+          allCanCreateTopicFalse = false
           rssCache.set(username, items)
           logger.info(`[linuxdo-plugin] 获取 ${username} RSS 成功`)
         }
       } catch (err) {
-        // Cookie 已刷新，终止当前任务
         if (err instanceof CookieRefreshedError) {
           logger.info('[linuxdo-plugin] Cookie 已刷新，终止当前定时任务')
           return
         }
         logger.error(`[linuxdo-plugin] 获取 ${username} RSS 失败: ${err.message}`)
-        rssCache.set(username, []) // 失败时设为空数组
+        rssCache.set(username, [])
       }
       // 请求间隔（最后一个不等待）
       const delay = config.requestDelay ?? 15
