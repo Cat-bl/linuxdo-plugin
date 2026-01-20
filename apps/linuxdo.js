@@ -587,6 +587,19 @@ export default class LinuxDoApp extends plugin {
     const pushed = await redis.get(redisKey)
     if (pushed) return
 
+    // 检查发帖时间是否过早，过早则忽略并标记为已推送
+    const ignoreMinutes = config.ignoreOlderThanMinutes || 0
+    if (ignoreMinutes > 0 && item.pubDate) {
+      const pubTime = new Date(item.pubDate).getTime()
+      const now = Date.now()
+      const diffMinutes = (now - pubTime) / 1000 / 60
+      if (diffMinutes > ignoreMinutes) {
+        await redis.set(redisKey, '1', { EX: 3600 * 72 })
+        logger.info(`[linuxdo-plugin] 帖子发帖时间超过 ${ignoreMinutes} 分钟，跳过推送: ${item.title}`)
+        return
+      }
+    }
+
     // 截图并构建消息
     try {
       const { screenshot: imgBuffer, cdkUrl } = await screenshotPost(item.link, config.proxy, config.cookie)

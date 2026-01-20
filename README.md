@@ -72,6 +72,11 @@ requestDelay: 15
 # false: 获取一个用户数据成功后立即判断并推送（默认）
 batchPush: false
 
+# 忽略发帖时间过早的帖子（分钟）
+# 如果帖子的发帖时间距离当前时间超过此分钟数，则不推送并标记为已推送
+# 设为 0 则不启用此功能
+ignoreOlderThanMinutes: 10
+
 # 自动刷新 Cookie 配置
 autoCookie:
   enable: true                    # 是否启用自动刷新 Cookie
@@ -203,6 +208,7 @@ CDK链接：https://cdk.linux.do/xxx/xxx
 - **即时推送模式**（默认，`batchPush: false`）：获取一个用户数据成功后立即判断并推送，响应更快
 - **批量推送模式**（`batchPush: true`）：先获取所有订阅用户数据，全部成功后再统一推送
 - 每次定时任务只检查用户最新的 1 条帖子（按发布时间排序）
+- 发帖时间超过 `ignoreOlderThanMinutes` 分钟的帖子会被自动忽略并标记为已推送（默认 10 分钟）
 - 使用帖子 ID + 群号作为去重键，各群推送独立
 - 多群订阅同一用户时，只请求一次 API，避免重复请求
 - 请求间隔 15-20 秒，避免触发限流

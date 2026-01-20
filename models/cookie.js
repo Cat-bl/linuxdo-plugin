@@ -168,6 +168,13 @@ async function getLinuxDoPage() {
  */
 async function isLoggedIn(page) {
   try {
+    // 先检查当前 URL 是否为登录页面
+    const currentUrl = page.url()
+    if (currentUrl.includes('/login')) {
+      logger.info('[linuxdo-plugin] 检测到登录页面，判定为未登录')
+      return false
+    }
+
     // 检查 Cookie 中是否有 _t（登录凭证）
     const cookies = await page.cookies()
     const hasToken = cookies.some(c => c.name === '_t' && c.domain.includes('linux.do'))
@@ -194,17 +201,24 @@ async function autoLogin(page, username, password) {
   try {
     logger.info('[linuxdo-plugin] 开始自动登录...')
 
-    // 先跳转到首页
-    await page.goto('https://linux.do/', { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await new Promise(r => setTimeout(r, 3000))
+    const currentUrl = page.url()
 
-    // 点击登录按钮
-    const loginBtn = await page.$('.login-button, .header-buttons .btn-primary')
-    if (!loginBtn) {
-      logger.warn('[linuxdo-plugin] 未找到登录按钮')
-      return false
+    // 如果已经在登录页面，直接填写表单
+    if (currentUrl.includes('/login')) {
+      logger.info('[linuxdo-plugin] 已在登录页面，直接填写表单')
+    } else {
+      // 先跳转到首页
+      await page.goto('https://linux.do/', { waitUntil: 'domcontentloaded', timeout: 60000 })
+      await new Promise(r => setTimeout(r, 3000))
+
+      // 点击登录按钮
+      const loginBtn = await page.$('.login-button, .header-buttons .btn-primary')
+      if (!loginBtn) {
+        logger.warn('[linuxdo-plugin] 未找到登录按钮')
+        return false
+      }
+      await loginBtn.click()
     }
-    await loginBtn.click()
 
     // 等待登录表单出现
     await page.waitForSelector('#login-account-name', { timeout: 10000 })
