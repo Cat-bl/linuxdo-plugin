@@ -117,7 +117,13 @@ function savePushData(data) {
  */
 function formatTime(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
+  // 处理纯数字时间戳
+  let date
+  if (/^\d+$/.test(dateStr)) {
+    date = new Date(Number(dateStr))
+  } else {
+    date = new Date(dateStr)
+  }
   if (isNaN(date.getTime())) return dateStr // 无法解析时返回原字符串
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
