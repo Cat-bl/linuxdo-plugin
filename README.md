@@ -18,10 +18,11 @@
 ![效果图1](./1.jpg)
 
 ## 安装
-
-1. 将 `linuxdo-plugin` 文件夹放入 `plugins` 目录
-2. 安装依赖：`pnpm install --filter=linuxdo-plugin`
-3. 重启机器人
+1.在Yunzai根目录下执行：
+```
+git clone --depth=1 https://github.com/Cat-bl/linuxdo-plugin plugins/linuxdo-plugin
+```
+2. 重启机器人
 
 ```
 plugins/
