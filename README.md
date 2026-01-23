@@ -24,33 +24,6 @@ git clone --depth=1 https://github.com/Cat-bl/linuxdo-plugin plugins/linuxdo-plu
 ```
 2. 重启机器人
 
-```
-plugins/
-└── linuxdo-plugin/
-    ├── index.js          # 插件入口
-    ├── package.json      # 依赖配置
-    ├── README.md
-    ├── apps/
-    │   └── linuxdo.js    # 主逻辑
-    ├── models/
-    │   ├── rss.js        # 数据获取与解析
-    │   ├── screenshot.js # 页面截图
-    │   └── cookie.js     # Cookie 自动刷新
-    ├── config_default/   # 默认配置模板（提交到 Git）
-    │   └── config.yaml
-    └── data/             # 运行时数据（不提交到 Git）
-        ├── config.yaml   # 用户配置
-        ├── push.yaml     # 订阅数据
-        └── browser-data/ # 浏览器数据
-```
-
-## 依赖
-
-- `https-proxy-agent` - 代理支持
-- `yaml` - 配置文件解析
-- `chokidar` - 配置热加载
-- `puppeteer` - 页面截图和浏览器自动化
-
 ## 配置
 
 配置文件位于 `plugins/linuxdo-plugin/data/config.yaml`，修改后自动生效。
@@ -277,6 +250,26 @@ https://linux.do/u/neo  →  用户名: neo
 - Puppeteer 连接浏览器实现 Cookie 自动刷新
 - chokidar 监听配置文件变化实现热加载
 - Redis 存储推送记录和重试计数
+
+```
+plugins/
+└── linuxdo-plugin/
+    ├── index.js          # 插件入口
+    ├── package.json      # 依赖配置
+    ├── README.md
+    ├── apps/
+    │   └── linuxdo.js    # 主逻辑
+    ├── models/
+    │   ├── rss.js        # 数据获取与解析
+    │   ├── screenshot.js # 页面截图
+    │   └── cookie.js     # Cookie 自动刷新
+    ├── config_default/   # 默认配置模板（提交到 Git）
+    │   └── config.yaml
+    └── data/             # 运行时数据（不提交到 Git）
+        ├── config.yaml   # 用户配置
+        ├── push.yaml     # 订阅数据
+        └── browser-data/ # 浏览器数据
+```
 
 ## License
 
