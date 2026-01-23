@@ -5,6 +5,7 @@
 ## 功能
 
 - 订阅 Linux.do 社区用户，当用户发布新帖子时自动推送到群聊/私聊
+- 自动检测群聊中的 linux.do 帖子链接并解析推送
 - 推送内容包含帖子截图、用户名、标题、发帖时间、原帖链接
 - 自动检测帖子中的 CDK 链接并在推送中显示
 - 支持多群/多用户订阅，各群推送独立互不影响
@@ -33,6 +34,10 @@ git clone --depth=1 https://github.com/Cat-bl/linuxdo-plugin plugins/linuxdo-plu
 ```yaml
 # 是否启用推送
 pushStatus: true
+
+# 是否启用群聊链接解析
+# 自动检测群聊中的 linux.do/t/topic/xxx 链接并解析推送
+linkParseStatus: true
 
 # 检测间隔 (Cron 表达式)
 checkInterval: "*/5 * * * *"
@@ -130,6 +135,10 @@ proxy:
 | `#linuxdo连接浏览器` | 主人 | 手动连接浏览器 |
 | `#linuxdo断开浏览器` | 主人 | 断开浏览器连接 |
 | `#linuxdo刷新cookie` | 主人 | 手动刷新 Cookie |
+
+### 链接解析
+
+在群聊中发送包含 `https://linux.do/t/topic/xxx` 格式的链接时，会自动触发帖子解析推送（需要 `linkParseStatus: true`）。
 
 ### 使用示例
 

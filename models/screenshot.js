@@ -54,7 +54,7 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
 
     await page.setViewport({
       width: 800,
-      height: 2000,
+      height: 6000,
       deviceScaleFactor: 2
     })
 
@@ -118,15 +118,26 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
       const firstPost = posts[0]
       const lastPost = posts[count - 1]
 
-      const firstRect = firstPost.getBoundingClientRect()
-      const lastRect = lastPost.getBoundingClientRect()
+      // 使用 offsetTop 和 offsetHeight 获取绝对位置，避免视口问题
+      const getAbsoluteTop = (el) => {
+        let top = 0
+        while (el) {
+          top += el.offsetTop
+          el = el.offsetParent
+        }
+        return top
+      }
+
+      const firstTop = getAbsoluteTop(firstPost)
+      const lastTop = getAbsoluteTop(lastPost)
+      const lastHeight = lastPost.offsetHeight
 
       // 计算总区域
       return {
-        x: firstRect.x,
-        y: firstRect.y + window.scrollY,
-        width: firstRect.width,
-        height: (lastRect.y + lastRect.height) - firstRect.y
+        x: firstPost.getBoundingClientRect().x,
+        y: firstTop,
+        width: firstPost.offsetWidth,
+        height: (lastTop + lastHeight) - firstTop
       }
     })
 

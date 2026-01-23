@@ -32,6 +32,7 @@ function ensureConfigFiles() {
 // 默认配置
 const DEFAULT_CONFIG = {
   pushStatus: true,
+  linkParseStatus: true,
   checkInterval: '*/30 * * * *',
   cookie: '',
   proxy: {
@@ -184,6 +185,10 @@ export default class LinuxDoApp extends plugin {
           reg: '^#linuxdo刷新cookie$',
           fnc: 'refreshCookieCmd',
           permission: 'master'
+        },
+        {
+          reg: 'linux\\.do/t/topic/\\d+',
+          fnc: 'parseLink'
         }
       ],
       task: config.pushStatus
@@ -829,6 +834,46 @@ export default class LinuxDoApp extends plugin {
     } else {
       this.reply('Cookie 获取失败，请确保：\n1. 浏览器已连接（#linuxdo连接浏览器）\n2. 浏览器中已登录 linux.do')
     }
+    return true
+  }
+
+  /**
+   * 监听群聊中的 linux.do 帖子链接并解析推送
+   */
+  async parseLink() {
+    if (!this.config.linkParseStatus) return false
+
+    const urlReg = /https?:\/\/linux\.do\/t\/topic\/(\d+)/
+    const match = urlReg.exec(this.e.msg)
+    if (!match) return false
+
+    const topicId = match[1]
+    const url = `https://linux.do/t/topic/${topicId}`
+
+    try {
+      this.reply('检测到Linux.do社区帖子,正在解析 ...')
+      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate } = await screenshotPost(url, this.config.proxy, this.config.cookie)
+      const pubTime = pubDate ? formatTime(pubDate) : ''
+
+      const msg = [
+        segment.image(imgBuffer),
+        `\nLinux do社区帖子解析:\n`,
+        `用户：${creator || '未知'}\n`,
+        `标题：${title || '未知'}\n`,
+        pubTime ? `发帖时间：${pubTime}\n` : '',
+        `原帖：${url}`
+      ]
+
+      if (cdkUrl) {
+        msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
+      }
+
+      this.reply(msg)
+    } catch (err) {
+      this.reply(`解析失败: ${err.message}`)
+      logger.error(`[linuxdo-plugin] 链接解析失败:`, err)
+    }
+
     return true
   }
 }
