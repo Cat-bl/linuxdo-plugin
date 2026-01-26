@@ -127,6 +127,10 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
       // 隐藏顶部导航
       const header = document.querySelector('.d-header-wrap, header.d-header')
       if (header) header.style.display = 'none'
+
+      // 隐藏"上次访问"红线
+      const lastVisit = document.querySelector('.topic-post-visited-line, .post-stream .topic-post-visited')
+      if (lastVisit) lastVisit.style.display = 'none'
     })
 
     // 计算主帖 + 5条评论的区域

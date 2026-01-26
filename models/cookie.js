@@ -198,8 +198,24 @@ async function isLoggedIn(page) {
  * @param {string} password 密码
  */
 async function autoLogin(page, username, password) {
+  let client = null
+  let windowId = null
+
   try {
     logger.info('[linuxdo-plugin] 开始自动登录...')
+
+    // 创建 CDP session，用于控制窗口状态
+    client = await page.target().createCDPSession()
+    const windowInfo = await client.send('Browser.getWindowForTarget')
+    windowId = windowInfo.windowId
+
+    // 从最小化状态恢复窗口
+    logger.info('[linuxdo-plugin] 恢复浏览器窗口...')
+    await client.send('Browser.setWindowBounds', {
+      windowId,
+      bounds: { windowState: 'normal' }
+    })
+    await new Promise(r => setTimeout(r, 500))
 
     const currentUrl = page.url()
 
@@ -256,6 +272,19 @@ async function autoLogin(page, username, password) {
   } catch (err) {
     logger.error(`[linuxdo-plugin] 自动登录失败: ${err.message}`)
     return false
+  } finally {
+    // 登录完成后最小化窗口
+    if (client && windowId) {
+      try {
+        logger.info('[linuxdo-plugin] 最小化浏览器窗口...')
+        await client.send('Browser.setWindowBounds', {
+          windowId,
+          bounds: { windowState: 'minimized' }
+        })
+      } catch (e) {
+        // 忽略最小化失败的错误
+      }
+    }
   }
 }
 
