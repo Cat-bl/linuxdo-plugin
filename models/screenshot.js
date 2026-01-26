@@ -78,6 +78,27 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
       await new Promise(r => setTimeout(r, 500))
     })
 
+    // 展开所有模糊/剧透内容和折叠内容
+    await page.evaluate(() => {
+      // 点击所有带 spoiler 的元素展开
+      document.querySelectorAll('.spoiled, .spoiler-blurred, [data-spoiler-state="blurred"]').forEach(el => {
+        el.click()
+      })
+      // 移除图片模糊样式
+      document.querySelectorAll('img').forEach(img => {
+        img.style.filter = 'none'
+      })
+      // 移除 lightbox 模糊
+      document.querySelectorAll('.spoiler-blurred, .blurred').forEach(el => {
+        el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
+      })
+      // 展开所有 <details> 折叠内容 (Summary)
+      document.querySelectorAll('details').forEach(el => {
+        el.setAttribute('open', '')
+      })
+    })
+    await new Promise(r => setTimeout(r, 500))
+
     // 额外等待渲染
     await new Promise(r => setTimeout(r, 5000))
 
