@@ -133,6 +133,15 @@ function formatTime(dateStr) {
   return `${year}-${month}-${day} ${hour}:${minute}`
 }
 
+/**
+ * 格式化文件链接列表
+ */
+function formatFiles(files) {
+  if (!files || files.length === 0) return ''
+  const list = files.map((f, i) => `${i + 1}.${f.name}: ${f.url}`).join('\n')
+  return `\n---检测到存在${files.length}个文件链接---\n${list}`
+}
+
 export default class LinuxDoApp extends plugin {
   constructor() {
     const config = getConfig()
@@ -356,7 +365,7 @@ export default class LinuxDoApp extends plugin {
       try {
         this.reply(`正在获取帖子 ${topicId} 内容，请稍候...`)
         const url = `https://linux.do/t/topic/${topicId}`
-        const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
+        const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
         const pubTime = pubDate ? formatTime(pubDate) : ''
 
         const msg = [
@@ -372,7 +381,16 @@ export default class LinuxDoApp extends plugin {
           msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
         }
 
-        this.reply(msg)
+        const filesText = formatFiles(files)
+        if (filesText) {
+          msg.push(filesText)
+        }
+
+        if (files && files.length > 0) {
+          await this.replyForward(msg)
+        } else {
+          this.reply(msg)
+        }
       } catch (err) {
         this.reply(`测试失败: ${err.message}`)
         logger.error(`[linuxdo-plugin] 测试推送失败:`, err)
@@ -404,7 +422,7 @@ export default class LinuxDoApp extends plugin {
       }
 
       const item = items[0]
-      const { screenshot: imgBuffer, cdkUrl } = await screenshotPost(item.link, this.config.proxy, this.config.cookie, this.config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, this.config.proxy, this.config.cookie, this.config.userAgent)
       const pubTime = formatTime(item.pubDate)
       const msg = [
         segment.image(imgBuffer),
@@ -420,7 +438,16 @@ export default class LinuxDoApp extends plugin {
         msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
       }
 
-      this.reply(msg)
+      const filesText = formatFiles(files)
+      if (filesText) {
+        msg.push(filesText)
+      }
+
+      if (files && files.length > 0) {
+        await this.replyForward(msg)
+      } else {
+        this.reply(msg)
+      }
     } catch (err) {
       this.reply(`测试失败: ${err.message}`)
       logger.error(`[linuxdo-plugin] 测试推送失败:`, err)
@@ -638,7 +665,7 @@ export default class LinuxDoApp extends plugin {
 
     // 截图并构建消息
     try {
-      const { screenshot: imgBuffer, cdkUrl } = await screenshotPost(item.link, config.proxy, config.cookie, config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, config.proxy, config.cookie, config.userAgent)
       const pubTime = formatTime(item.pubDate)
 
       const msg = [
@@ -655,7 +682,16 @@ export default class LinuxDoApp extends plugin {
         msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
       }
 
-      await this.sendMsg(chatType, chatId, msg)
+      const filesText = formatFiles(files)
+      if (filesText) {
+        msg.push(filesText)
+      }
+
+      if (files && files.length > 0) {
+        await this.sendForwardMsg(chatType, chatId, msg)
+      } else {
+        await this.sendMsg(chatType, chatId, msg)
+      }
       // 标记为已推送，避免重复推送
       await redis.set(redisKey, '1', { EX: 3600 * 72 })
       logger.info(`[linuxdo-plugin] 推送成功: ${item.title}`)
@@ -686,6 +722,26 @@ export default class LinuxDoApp extends plugin {
     } else {
       await Bot.pickFriend(String(chatId)).sendMsg(msg)
     }
+  }
+
+  /**
+   * 以转发消息格式发送（用于包含文件链接时避免刷屏）
+   */
+  async sendForwardMsg(chatType, chatId, msg) {
+    const forwardMsg = [{ message: msg, nickname: 'Linux.do', user_id: Bot.uin }]
+    if (chatType === 'group') {
+      await Bot.pickGroup(String(chatId)).sendMsg(Bot.makeForwardMsg(forwardMsg))
+    } else {
+      await Bot.pickFriend(String(chatId)).sendMsg(Bot.makeForwardMsg(forwardMsg))
+    }
+  }
+
+  /**
+   * 以转发消息格式回复当前消息
+   */
+  async replyForward(msg) {
+    const forwardMsg = [{ message: msg, nickname: 'Linux.do', user_id: Bot.uin }]
+    this.reply(Bot.makeForwardMsg(forwardMsg))
   }
 
   /**
@@ -881,7 +937,7 @@ export default class LinuxDoApp extends plugin {
 
     try {
       this.reply('检测到Linux.do社区帖子,正在解析 ...')
-      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
       const pubTime = pubDate ? formatTime(pubDate) : ''
 
       const msg = [
@@ -897,7 +953,16 @@ export default class LinuxDoApp extends plugin {
         msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
       }
 
-      this.reply(msg)
+      const filesText = formatFiles(files)
+      if (filesText) {
+        msg.push(filesText)
+      }
+
+      if (files && files.length > 0) {
+        await this.replyForward(msg)
+      } else {
+        this.reply(msg)
+      }
     } catch (err) {
       this.reply(`解析失败: ${err.message}`)
       logger.error(`[linuxdo-plugin] 链接解析失败:`, err)

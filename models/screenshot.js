@@ -242,7 +242,21 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
         pubDate = timeEl.getAttribute('datetime') || timeEl.getAttribute('data-time') || timeEl.title || ''
       }
 
-      return { cdkUrl, title, creator, pubDate }
+      // 获取附件文件链接
+      const files = []
+      const firstPostContent = document.querySelector('.topic-post .cooked, .topic-post .post-body')
+      if (firstPostContent) {
+        firstPostContent.querySelectorAll('a.attachment').forEach(a => {
+          const name = a.textContent.trim()
+          const href = a.getAttribute('href')
+          if (name && href) {
+            const fullUrl = href.startsWith('http') ? href : `https://linux.do${href}`
+            files.push({ name, url: fullUrl })
+          }
+        })
+      }
+
+      return { cdkUrl, title, creator, pubDate, files }
     })
 
     return {
@@ -250,7 +264,8 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       cdkUrl: postInfo.cdkUrl,
       title: postInfo.title,
       creator: postInfo.creator,
-      pubDate: postInfo.pubDate
+      pubDate: postInfo.pubDate,
+      files: postInfo.files || []
     }
   } finally {
     await browser.close()
