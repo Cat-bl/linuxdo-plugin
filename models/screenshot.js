@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer'
  * @param {string} cookie Linux.do 的 _t cookie 值
  * @returns {Promise<{screenshot: Buffer, cdkUrl: string|null}>} 图片 Buffer 和 CDK 链接
  */
-export async function screenshotPost(url, proxy = null, cookie = '') {
+export async function screenshotPost(url, proxy = null, cookie = '', userAgent = '') {
   const args = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -32,7 +32,7 @@ export async function screenshotPost(url, proxy = null, cookie = '') {
     const page = await browser.newPage()
 
     // 设置 User-Agent
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    await page.setUserAgent(userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
     // 设置 Cookie 绕过 Cloudflare
     if (cookie) {
