@@ -19,6 +19,47 @@ let browser = null
 let browserProcess = null
 let linuxDoPage = null
 
+// autoCookie 配置缓存（用于重连时获取 browserPath 和 port）
+let autoCookieConfig = null
+
+/**
+ * 检测浏览器是否仍然连接
+ */
+function isBrowserConnected() {
+  try {
+    return browser && browser.isConnected()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 确保浏览器可用，断开时自动重连/重启
+ * @returns {Promise<boolean>}
+ */
+async function ensureBrowser() {
+  if (isBrowserConnected()) return true
+
+  // 浏览器已断开，清理旧状态
+  logger.warn('[linuxdo-plugin] 检测到浏览器已断开，尝试重新连接...')
+  browser = null
+  linuxDoPage = null
+
+  if (!autoCookieConfig) {
+    logger.warn('[linuxdo-plugin] 无法重连：缺少 autoCookie 配置')
+    return false
+  }
+
+  const { browserPath, debuggingPort } = autoCookieConfig
+  const success = await launchBrowser(browserPath, debuggingPort)
+  if (success) {
+    logger.info('[linuxdo-plugin] 浏览器重连成功')
+  } else {
+    logger.error('[linuxdo-plugin] 浏览器重连失败')
+  }
+  return success
+}
+
 /**
  * 启动浏览器（调试模式）
  * @param {string} browserPath 浏览器路径
@@ -90,6 +131,14 @@ export async function connectBrowser(debuggingUrl = 'http://127.0.0.1:9222') {
       browserURL: debuggingUrl,
       defaultViewport: null
     })
+
+    // 监听浏览器断开事件
+    browser.on('disconnected', () => {
+      logger.warn('[linuxdo-plugin] 浏览器连接已断开')
+      browser = null
+      linuxDoPage = null
+    })
+
     logger.info('[linuxdo-plugin] 已连接到浏览器')
     return true
   } catch (err) {
@@ -114,7 +163,7 @@ export async function disconnectBrowser() {
  * 获取或创建 linux.do 页面（确保只有一个标签页）
  */
 async function getLinuxDoPage() {
-  if (!browser) return null
+  if (!isBrowserConnected()) return null
 
   try {
     const pages = await browser.pages()
@@ -138,6 +187,15 @@ async function getLinuxDoPage() {
 
     if (targetPage) {
       linuxDoPage = targetPage
+      // 先检查是否卡在人机验证，只在需要时才恢复窗口
+      const title = await linuxDoPage.title().catch(() => '')
+      if (title.includes('请稍候') || title.includes('Just a moment')) {
+        await setWindowState(linuxDoPage, 'normal')
+        const passed = await handleCloudflareTurnstile(linuxDoPage)
+        if (passed) {
+          await new Promise(r => setTimeout(r, 5000))
+        }
+      }
       return linuxDoPage
     }
 
@@ -153,6 +211,15 @@ async function getLinuxDoPage() {
       await linuxDoPage.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
     }
     await new Promise(r => setTimeout(r, 5000))
+    // 导航后检测人机验证，只在需要时恢复窗口
+    const newTitle = await linuxDoPage.title().catch(() => '')
+    if (newTitle.includes('请稍候') || newTitle.includes('Just a moment')) {
+      await setWindowState(linuxDoPage, 'normal')
+      const passed = await handleCloudflareTurnstile(linuxDoPage)
+      if (passed) {
+        await new Promise(r => setTimeout(r, 5000))
+      }
+    }
     logger.info('[linuxdo-plugin] 已打开 linux.do 页面')
     return linuxDoPage
   } catch (err) {
@@ -180,14 +247,12 @@ async function isLoggedIn(page) {
     const hasToken = cookies.some(c => c.name === '_t' && c.domain.includes('linux.do'))
     if (hasToken) return true
 
-    // 检查页面是否有登录按钮（未登录状态）
-    const loginBtn = await page.$('.login-button, .header-buttons .btn-primary')
-    if (loginBtn) return false
-
-    return true // 默认认为已登录
+    // 没有 _t cookie，判定为未登录
+    logger.info('[linuxdo-plugin] 未检测到登录凭证 _t，判定为未登录')
+    return false
   } catch (err) {
     logger.error(`[linuxdo-plugin] 检测登录状态失败: ${err.message}`)
-    return true // 出错时默认已登录，避免误触发登录
+    return false
   }
 }
 
@@ -227,6 +292,12 @@ async function autoLogin(page, username, password) {
       await page.goto('https://linux.do/', { waitUntil: 'domcontentloaded', timeout: 60000 })
       await new Promise(r => setTimeout(r, 3000))
 
+      // 检测人机验证
+      const passed = await handleCloudflareTurnstile(page)
+      if (passed) {
+        await new Promise(r => setTimeout(r, 5000))
+      }
+
       // 点击登录按钮
       const loginBtn = await page.$('.login-button, .header-buttons .btn-primary')
       if (!loginBtn) {
@@ -260,6 +331,12 @@ async function autoLogin(page, username, password) {
       logger.info(`[linuxdo-plugin] 跳转到配置页面: ${DEFAULT_PAGE}`)
       await page.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
       await new Promise(r => setTimeout(r, 5000))
+
+      // 检测人机验证
+      const passed2 = await handleCloudflareTurnstile(page)
+      if (passed2) {
+        await new Promise(r => setTimeout(r, 5000))
+      }
 
       // 清理多余的标签页，只保留当前页面
       await cleanupExtraTabs(page)
@@ -314,8 +391,7 @@ async function cleanupExtraTabs(keepPage) {
  * @returns {Promise<{cookie: string, userAgent: string}|null>}
  */
 export async function fetchCookieFromBrowser(refresh = false) {
-  if (!browser) {
-    logger.warn('[linuxdo-plugin] 浏览器未连接')
+  if (!await ensureBrowser()) {
     return null
   }
 
@@ -325,9 +401,19 @@ export async function fetchCookieFromBrowser(refresh = false) {
 
     // 刷新页面获取最新 Cookie
     if (refresh) {
+      await setWindowState(page, 'normal')
+
       logger.info('[linuxdo-plugin] 刷新页面获取最新 Cookie...')
       await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
       await new Promise(r => setTimeout(r, 3000))
+
+      // 检测并处理 Cloudflare 人机验证
+      const passed = await handleCloudflareTurnstile(page)
+      if (passed) {
+        await new Promise(r => setTimeout(r, 5000))
+      }
+
+      await setWindowState(page, 'minimized')
     }
 
     // 获取 Cookie（包括 Cloudflare 的 cf_clearance）
@@ -420,12 +506,86 @@ export function updateConfigCookie(cookie, userAgent = null) {
 }
 
 /**
+ * 检测并处理 Cloudflare Turnstile 人机验证
+ * @param {Object} page Puppeteer 页面对象
+ * @returns {Promise<boolean>} 是否检测到并处理了验证
+ */
+async function handleCloudflareTurnstile(page) {
+  try {
+    const title = await page.title()
+    if (!title.includes('请稍候') && !title.includes('Just a moment')) {
+      return false
+    }
+
+    logger.info('[linuxdo-plugin] 检测到 Cloudflare 人机验证，尝试自动点击...')
+
+    // 等待验证框渲染
+    await new Promise(r => setTimeout(r, 3000))
+
+    // 优先尝试找 iframe 并点击
+    const iframe = await page.$('iframe[id^="cf-chl-widget"]') ||
+                   await page.$('iframe[src*="challenges.cloudflare.com"]') ||
+                   await page.$('iframe[title*="Cloudflare"]')
+
+    if (iframe) {
+      const box = await iframe.boundingBox()
+      if (box) {
+        await page.mouse.click(box.x + 32, box.y + box.height / 2)
+        logger.info('[linuxdo-plugin] 已点击 Cloudflare 验证 (iframe)')
+      }
+    } else {
+      // 验证框无 iframe，直接通过坐标点击 checkbox 区域
+      const { width, height } = await page.evaluate(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight
+      }))
+      await page.mouse.click(width / 2 - 100, height / 2 + 80)
+      logger.info('[linuxdo-plugin] 已点击 Cloudflare 验证 (坐标)')
+    }
+
+    // 等待验证通过
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+      const newTitle = await page.title()
+      if (!newTitle.includes('请稍候') && !newTitle.includes('Just a moment')) {
+        logger.info('[linuxdo-plugin] Cloudflare 验证已通过')
+        return true
+      }
+    }
+
+    logger.warn('[linuxdo-plugin] Cloudflare 验证可能未通过，请手动处理')
+    return false
+  } catch (err) {
+    logger.error(`[linuxdo-plugin] 处理 Cloudflare 验证失败: ${err.message}`)
+    return false
+  }
+}
+
+/**
+ * 通过 CDP 设置浏览器窗口状态
+ * @param {Object} page Puppeteer 页面对象
+ * @param {string} state 窗口状态：normal / minimized
+ */
+async function setWindowState(page, state) {
+  try {
+    const client = await page.target().createCDPSession()
+    const { windowId } = await client.send('Browser.getWindowForTarget')
+    await client.send('Browser.setWindowBounds', {
+      windowId,
+      bounds: { windowState: state }
+    })
+    await new Promise(r => setTimeout(r, 500))
+  } catch (e) {
+    logger.warn(`[linuxdo-plugin] 设置窗口状态 ${state} 失败: ${e.message}`)
+  }
+}
+
+/**
  * 自动刷新 Cookie（获取并更新）
  * @param {boolean} refresh 是否刷新页面
  */
 export async function refreshCookie(refresh = false) {
-  if (!browser) {
-    logger.warn('[linuxdo-plugin] 浏览器未连接')
+  if (!await ensureBrowser()) {
     return false
   }
 
@@ -435,9 +595,21 @@ export async function refreshCookie(refresh = false) {
 
     // 刷新页面
     if (refresh) {
+      // 先恢复窗口，确保页面正常渲染（最小化状态下 Cloudflare 验证不会加载）
+      await setWindowState(page, 'normal')
+
       logger.info('[linuxdo-plugin] 刷新页面获取最新 Cookie...')
       await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 })
       await new Promise(r => setTimeout(r, 3000))
+
+      // 检测并处理 Cloudflare 人机验证
+      const passed = await handleCloudflareTurnstile(page)
+      if (passed) {
+        await new Promise(r => setTimeout(r, 5000))
+      }
+
+      // 完成后最小化窗口
+      await setWindowState(page, 'minimized')
     }
 
     // 检测登录状态
@@ -490,6 +662,9 @@ export async function initAutoCookie(config) {
 
   const { browserPath, debuggingPort } = config.autoCookie
 
+  // 缓存配置，用于浏览器断开后自动重连
+  autoCookieConfig = { browserPath, debuggingPort }
+
   // 启动/连接浏览器
   const success = await launchBrowser(browserPath, debuggingPort)
   if (!success) {
@@ -497,7 +672,18 @@ export async function initAutoCookie(config) {
     return false
   }
 
-  // 获取初始 Cookie
+  // 启动后检测初始页面是否卡在人机验证
+  try {
+    const page = await getLinuxDoPage()
+    if (page) {
+      // getLinuxDoPage 内部已处理验证，这里只需最小化窗口
+      await setWindowState(page, 'minimized')
+    }
+  } catch (e) {
+    logger.warn(`[linuxdo-plugin] 启动时验证检测失败: ${e.message}`)
+  }
+
+  // 获取初始 Cookie（带登录检测）
   await refreshCookie(false)
 
   logger.info('[linuxdo-plugin] 自动 Cookie 刷新已初始化')

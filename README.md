@@ -91,6 +91,8 @@ proxy:
 3. 请求失败达到 `maxRetries` 次数后自动刷新 Cookie
 4. 检测到登录失效时自动使用配置的账号密码登录
 5. 自动同步浏览器的 User-Agent，确保与 Cookie 一致（避免 Cloudflare 403）
+6. 自动检测并处理 Cloudflare Turnstile 人机验证
+7. 浏览器被手动关闭后自动重新启动并连接
 
 **注意**：首次使用需要手动在浏览器中登录 linux.do，或配置 `username` 和 `password` 实现自动登录。
 
