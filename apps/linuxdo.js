@@ -154,7 +154,7 @@ export default class LinuxDoApp extends plugin {
           permission: 'master'
         },
         {
-          reg: '^#linuxdo订阅列表$',
+          reg: '^#linuxdo订阅列表(\\s+\\d+)?$',
           fnc: 'listSub'
         },
         {
@@ -322,20 +322,29 @@ export default class LinuxDoApp extends plugin {
 
   /**
    * 查看订阅列表
+   * 用法: #linuxdo订阅列表 [群号]
    */
   async listSub() {
+    const targetGroupId = this.e.msg.replace(/^#linuxdo订阅列表\s*/i, '').trim()
     const pushData = getPushData()
-    const chatType = this.e.isGroup ? 'group' : 'private'
-    const chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
 
-    const subs = pushData[chatType][chatId] || []
+    let chatType, chatId
+    if (targetGroupId) {
+      chatType = 'group'
+      chatId = targetGroupId
+    } else {
+      chatType = this.e.isGroup ? 'group' : 'private'
+      chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
+    }
+
+    const subs = pushData[chatType]?.[chatId] || []
     if (subs.length === 0) {
-      this.reply('当前没有任何 Linux.do 订阅')
+      this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : '当前'}没有任何 Linux.do 订阅`)
       return true
     }
 
     const list = subs.map((item, i) => `${i + 1}. ${item.username}`).join('\n')
-    this.reply(`Linux.do 订阅列表：\n${list}`)
+    this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : ''}Linux.do 订阅列表：\n${list}`)
     return true
   }
 
