@@ -123,8 +123,8 @@ proxy:
 
 | 指令 | 权限 | 说明 |
 |------|------|------|
-| `#订阅linuxdo 用户名` | 主人 | 订阅用户 |
-| `#取消订阅linuxdo 用户名` | 主人 | 取消订阅 |
+| `#订阅linuxdo 用户名 [群号]` | 主人 | 订阅用户，可指定群号 |
+| `#取消订阅linuxdo 用户名 [群号]` | 主人 | 取消订阅，可指定群号 |
 | `#linuxdo订阅列表` | 所有人 | 查看当前订阅列表 |
 | `#测试linuxdo推送` | 主人 | 测试推送功能（订阅用户最新帖子） |
 | `#测试linuxdo推送 帖子ID` | 主人 | 测试指定帖子的推送 |
@@ -144,9 +144,10 @@ proxy:
 
 ```
 #订阅linuxdo neo
-#订阅linuxdo Cat-bl
+#订阅linuxdo Cat-bl 123456789
 #linuxdo订阅列表
 #取消订阅linuxdo neo
+#取消订阅linuxdo Cat-bl 123456789
 #测试linuxdo推送
 #测试linuxdo推送 1420507
 #重置linuxdo推送

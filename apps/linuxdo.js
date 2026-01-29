@@ -214,11 +214,15 @@ export default class LinuxDoApp extends plugin {
 
   /**
    * 添加订阅
+   * 用法: #订阅linuxdo 用户名 [群号]
    */
   async addSub() {
-    const username = this.e.msg.replace(/^#订阅linuxdo\s*/i, '').trim()
+    const params = this.e.msg.replace(/^#订阅linuxdo\s*/i, '').trim().split(/\s+/)
+    const username = params[0]
+    const targetGroupId = params[1]
+
     if (!username) {
-      this.reply('请指定用户名，例如：#订阅linuxdo kingsword09')
+      this.reply('请指定用户名，例如：\n#订阅linuxdo kingsword09\n#订阅linuxdo kingsword09 123456789')
       return true
     }
 
@@ -234,8 +238,14 @@ export default class LinuxDoApp extends plugin {
     }
 
     const pushData = getPushData()
-    const chatType = this.e.isGroup ? 'group' : 'private'
-    const chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
+    let chatType, chatId
+    if (targetGroupId) {
+      chatType = 'group'
+      chatId = targetGroupId
+    } else {
+      chatType = this.e.isGroup ? 'group' : 'private'
+      chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
+    }
 
     if (!pushData[chatType]) {
       pushData[chatType] = {}
@@ -265,38 +275,48 @@ export default class LinuxDoApp extends plugin {
       await redis.set(redisKey, '1', { EX: 3600 * 72 })
     }
 
-    this.reply(`订阅 Linux.do 用户 ${username} 成功`)
+    this.reply(`订阅 Linux.do 用户 ${username} 成功${targetGroupId ? `（群 ${targetGroupId}）` : ''}`)
     return true
   }
 
   /**
    * 取消订阅
+   * 用法: #取消订阅linuxdo 用户名 [群号]
    */
   async delSub() {
-    const username = this.e.msg.replace(/^#取消订阅linuxdo\s*/i, '').trim()
+    const params = this.e.msg.replace(/^#取消订阅linuxdo\s*/i, '').trim().split(/\s+/)
+    const username = params[0]
+    const targetGroupId = params[1]
+
     if (!username) {
-      this.reply('请指定用户名，例如：#取消订阅linuxdo neo')
+      this.reply('请指定用户名，例如：\n#取消订阅linuxdo neo\n#取消订阅linuxdo neo 123456789')
       return true
     }
 
     const pushData = getPushData()
-    const chatType = this.e.isGroup ? 'group' : 'private'
-    const chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
+    let chatType, chatId
+    if (targetGroupId) {
+      chatType = 'group'
+      chatId = targetGroupId
+    } else {
+      chatType = this.e.isGroup ? 'group' : 'private'
+      chatId = this.e.isGroup ? this.e.group_id : this.e.user_id
+    }
 
     if (!pushData[chatType][chatId]) {
-      this.reply('当前没有任何订阅')
+      this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : '当前'}没有任何订阅`)
       return true
     }
 
     const index = pushData[chatType][chatId].findIndex(item => item.username === username)
     if (index === -1) {
-      this.reply(`未订阅用户 ${username}`)
+      this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : ''}未订阅用户 ${username}`)
       return true
     }
 
     pushData[chatType][chatId].splice(index, 1)
     savePushData(pushData)
-    this.reply(`已取消订阅 Linux.do 用户 ${username}`)
+    this.reply(`已取消订阅 Linux.do 用户 ${username}${targetGroupId ? `（群 ${targetGroupId}）` : ''}`)
     return true
   }
 
