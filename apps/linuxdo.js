@@ -255,16 +255,12 @@ export default class LinuxDoApp extends plugin {
     }
 
     // 检查是否已订阅
-    const existing = pushData[chatType][chatId].find(item => item.username === username)
-    if (existing) {
+    if (pushData[chatType][chatId].includes(username)) {
       this.reply(`已订阅用户 ${username}，无需重复订阅`)
       return true
     }
 
-    pushData[chatType][chatId].push({
-      username,
-      bot_id: this.e.self_id
-    })
+    pushData[chatType][chatId].push(username)
 
     savePushData(pushData)
 
@@ -308,7 +304,7 @@ export default class LinuxDoApp extends plugin {
       return true
     }
 
-    const index = pushData[chatType][chatId].findIndex(item => item.username === username)
+    const index = pushData[chatType][chatId].indexOf(username)
     if (index === -1) {
       this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : ''}未订阅用户 ${username}`)
       return true
@@ -343,7 +339,7 @@ export default class LinuxDoApp extends plugin {
       return true
     }
 
-    const list = subs.map((item, i) => `${i + 1}. ${item.username}`).join('\n')
+    const list = subs.map((item, i) => `${i + 1}. ${item}`).join('\n')
     this.reply(`${targetGroupId ? `群 ${targetGroupId} ` : ''}Linux.do 订阅列表：\n${list}`)
     return true
   }
@@ -395,7 +391,7 @@ export default class LinuxDoApp extends plugin {
       return true
     }
 
-    const username = subs[0].username
+    const username = subs[0]
     try {
       this.reply('正在获取数据并截图，请稍候...')
 
@@ -462,15 +458,15 @@ export default class LinuxDoApp extends plugin {
    */
   async pushTaskImmediate(pushData, config) {
     // 收集所有订阅的用户名及其对应的群/私聊（去重）
-    const userSubscriptions = new Map() // username -> [{chatType, chatId, sub}]
+    const userSubscriptions = new Map() // username -> [{chatType, chatId}]
     for (const chatType of ['group', 'private']) {
       const chats = pushData[chatType] || {}
       for (const [chatId, subs] of Object.entries(chats)) {
-        for (const sub of subs) {
-          if (!userSubscriptions.has(sub.username)) {
-            userSubscriptions.set(sub.username, [])
+        for (const username of subs) {
+          if (!userSubscriptions.has(username)) {
+            userSubscriptions.set(username, [])
           }
-          userSubscriptions.get(sub.username).push({ chatType, chatId, sub })
+          userSubscriptions.get(username).push({ chatType, chatId })
         }
       }
     }
@@ -495,9 +491,9 @@ export default class LinuxDoApp extends plugin {
           // 立即推送到所有订阅该用户的群/私聊
           if (items.length > 0) {
             const subscriptions = userSubscriptions.get(username)
-            for (const { chatType, chatId, sub } of subscriptions) {
+            for (const { chatType, chatId } of subscriptions) {
               try {
-                await this.checkAndPush(chatType, chatId, sub, config, items)
+                await this.checkAndPush(chatType, chatId, username, config, items)
               } catch (err) {
                 logger.error(`[linuxdo-plugin] 推送失败 ${username}: ${err.message}`)
               }
@@ -536,8 +532,8 @@ export default class LinuxDoApp extends plugin {
     for (const chatType of ['group', 'private']) {
       const chats = pushData[chatType] || {}
       for (const subs of Object.values(chats)) {
-        for (const sub of subs) {
-          allUsernames.add(sub.username)
+        for (const username of subs) {
+          allUsernames.add(username)
         }
       }
     }
@@ -591,14 +587,14 @@ export default class LinuxDoApp extends plugin {
       const chats = pushData[chatType] || {}
 
       for (const [chatId, subs] of Object.entries(chats)) {
-        for (const sub of subs) {
-          const items = rssCache.get(sub.username) || []
+        for (const username of subs) {
+          const items = rssCache.get(username) || []
           if (items.length === 0) continue
 
           try {
-            await this.checkAndPush(chatType, chatId, sub, config, items)
+            await this.checkAndPush(chatType, chatId, username, config, items)
           } catch (err) {
-            logger.error(`[linuxdo-plugin] 推送失败 ${sub.username}: ${err.message}`)
+            logger.error(`[linuxdo-plugin] 推送失败 ${username}: ${err.message}`)
           }
         }
       }
@@ -609,10 +605,10 @@ export default class LinuxDoApp extends plugin {
    * 检查并推送新帖子
    * @param {Array} items 已解析的帖子列表（可选，不传则自动获取）
    */
-  async checkAndPush(chatType, chatId, sub, config, items = null) {
+  async checkAndPush(chatType, chatId, username, config, items = null) {
     // 兼容直接调用的情况
     if (!items) {
-      const xml = await fetchRSS(sub.username, config.proxy, config.maxRetries || 20, config.cookie, config.userAgent)
+      const xml = await fetchRSS(username, config.proxy, config.maxRetries || 20, config.cookie, config.userAgent)
       const result = parseRSS(xml)
       items = result.items
     }
@@ -659,7 +655,7 @@ export default class LinuxDoApp extends plugin {
         msg.push(`\n---检测到存在CDK链接---\nCDK链接：${cdkUrl}`)
       }
 
-      await this.sendMsg(chatType, chatId, sub.bot_id, msg)
+      await this.sendMsg(chatType, chatId, msg)
       // 标记为已推送，避免重复推送
       await redis.set(redisKey, '1', { EX: 3600 * 72 })
       logger.info(`[linuxdo-plugin] 推送成功: ${item.title}`)
@@ -684,13 +680,11 @@ export default class LinuxDoApp extends plugin {
   /**
    * 发送消息
    */
-  async sendMsg(chatType, chatId, botId, msg) {
-    const bot = Bot[botId] ?? Bot
-
+  async sendMsg(chatType, chatId, msg) {
     if (chatType === 'group') {
-      await bot.pickGroup(String(chatId)).sendMsg(msg)
+      await Bot.pickGroup(String(chatId)).sendMsg(msg)
     } else {
-      await bot.pickFriend(String(chatId)).sendMsg(msg)
+      await Bot.pickFriend(String(chatId)).sendMsg(msg)
     }
   }
 
