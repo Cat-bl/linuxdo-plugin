@@ -527,29 +527,67 @@ async function handleCloudflareTurnstile(page) {
                    await page.$('iframe[src*="challenges.cloudflare.com"]') ||
                    await page.$('iframe[title*="Cloudflare"]')
 
+    // 计算点击坐标
+    let clickX, clickY
+
     if (iframe) {
+      // 优先使用 iframe 的实际位置
       const box = await iframe.boundingBox()
       if (box) {
-        await page.mouse.click(box.x + 32, box.y + box.height / 2)
-        logger.info('[linuxdo-plugin] 已点击 Cloudflare 验证 (iframe)')
+        clickX = box.x + 32
+        clickY = box.y + box.height / 2
+        logger.info(`[linuxdo-plugin] 找到验证 iframe, 位置: (${box.x}, ${box.y}, ${box.width}x${box.height})`)
       }
-    } else {
-      // 验证框无 iframe，直接通过坐标点击 checkbox 区域
-      const { width, height } = await page.evaluate(() => ({
-        width: window.innerWidth,
-        height: window.innerHeight
-      }))
-      await page.mouse.click(width / 2 - 100, height / 2 + 80)
-      logger.info('[linuxdo-plugin] 已点击 Cloudflare 验证 (坐标)')
     }
 
-    // 等待验证通过
-    for (let i = 0; i < 10; i++) {
-      await new Promise(r => setTimeout(r, 2000))
-      const newTitle = await page.title()
-      if (!newTitle.includes('请稍候') && !newTitle.includes('Just a moment')) {
-        logger.info('[linuxdo-plugin] Cloudflare 验证已通过')
-        return true
+    if (clickX == null) {
+      // 尝试通过 DOM 查找挑战容器的实际位置
+      const pos = await page.evaluate(() => {
+        const selectors = ['#challenge-stage', '#challenge-form', '.cf-turnstile', '#turnstile-wrapper', '[id^="cf-chl"]']
+        for (const sel of selectors) {
+          const el = document.querySelector(sel)
+          if (el) {
+            const rect = el.getBoundingClientRect()
+            if (rect.width > 0 && rect.height > 0) {
+              return { x: rect.x, y: rect.y, w: rect.width, h: rect.height, sel }
+            }
+          }
+        }
+        return null
+      })
+
+      if (pos) {
+        // checkbox 通常在容器左侧偏上位置
+        clickX = pos.x + Math.min(35, pos.w / 4)
+        clickY = pos.y + pos.h / 2
+        logger.info(`[linuxdo-plugin] 通过 DOM 定位验证框 (${pos.sel}), 位置: (${pos.x}, ${pos.y}, ${pos.w}x${pos.h})`)
+      } else {
+        // 兜底：使用视口相对坐标
+        const { width, height } = await page.evaluate(() => ({
+          width: window.innerWidth,
+          height: window.innerHeight
+        }))
+        clickX = width / 2 - 100
+        clickY = height / 2 + 80
+        logger.info(`[linuxdo-plugin] DOM 未定位到验证框，使用视口坐标兜底 (viewport: ${width}x${height})`)
+      }
+    }
+
+    // 点击并等待验证通过，失败时微调坐标重试
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const offsetX = attempt * 15  // 每次重试向右微调
+      const offsetY = attempt * -10 // 每次重试向上微调
+      await page.mouse.click(clickX + offsetX, clickY + offsetY)
+      logger.info(`[linuxdo-plugin] 第 ${attempt + 1} 次点击 (${Math.round(clickX + offsetX)}, ${Math.round(clickY + offsetY)})`)
+
+      // 等待验证通过
+      for (let i = 0; i < 5; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        const newTitle = await page.title()
+        if (!newTitle.includes('请稍候') && !newTitle.includes('Just a moment')) {
+          logger.info('[linuxdo-plugin] Cloudflare 验证已通过')
+          return true
+        }
       }
     }
 
