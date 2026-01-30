@@ -131,6 +131,27 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       // 隐藏"上次访问"红线
       const lastVisit = document.querySelector('.topic-post-visited-line, .post-stream .topic-post-visited')
       if (lastVisit) lastVisit.style.display = 'none'
+
+      // 隐藏用户名水印 - 注入 CSS 强制隐藏
+      const styleEl = document.createElement('style')
+      styleEl.textContent = `
+        div[style*="position: fixed"][style*="z-index: 999999"][style*="pointer-events: none"],
+        div[style*="position:fixed"][style*="z-index:999999"][style*="pointer-events:none"],
+        div[style*="background-image"][style*="z-index: 999999"] {
+          display: none !important;
+          visibility: hidden !important;
+          opacity: 0 !important;
+        }
+      `
+      document.head.appendChild(styleEl)
+
+      // 额外遍历移除水印元素
+      document.querySelectorAll('div').forEach(el => {
+        const s = el.getAttribute('style') || ''
+        if (s.includes('z-index') && s.includes('999999') && s.includes('pointer-events')) {
+          el.remove()
+        }
+      })
     })
 
     // 计算主帖 + 5条评论的区域
@@ -203,6 +224,23 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       logo.textContent = 'TRSS yunzai & linuxdo-plugin by 冰凉到通透'
       document.body.appendChild(logo)
     }, finalClip, logoHeight)
+
+    // 截图前再次移除水印
+    await page.evaluate(() => {
+      // 移除所有 fixed 定位的全屏覆盖层（水印特征）
+      document.querySelectorAll('body > div, body > *').forEach(el => {
+        const style = getComputedStyle(el)
+        const isFixed = style.position === 'fixed'
+        const isFullScreen = (style.width === '100vw' || parseInt(style.width) >= window.innerWidth) &&
+                            (style.height === '100vh' || parseInt(style.height) >= window.innerHeight)
+        const hasHighZIndex = parseInt(style.zIndex) > 9999
+        const noPointerEvents = style.pointerEvents === 'none'
+
+        if (isFixed && isFullScreen && hasHighZIndex && noPointerEvents) {
+          el.remove()
+        }
+      })
+    })
 
     // 截图（包含 logo）
     const screenshot = await page.screenshot({
