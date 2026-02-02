@@ -8,9 +8,11 @@ import puppeteer from 'puppeteer'
  * @param {string} url 帖子链接
  * @param {Object} proxy 代理配置
  * @param {string} cookie Linux.do 的 _t cookie 值
+ * @param {string} userAgent User-Agent
+ * @param {boolean} showLogo 是否显示底部 logo
  * @returns {Promise<{screenshot: Buffer, cdkUrl: string|null}>} 图片 Buffer 和 CDK 链接
  */
-export async function screenshotPost(url, proxy = null, cookie = '', userAgent = '') {
+export async function screenshotPost(url, proxy = null, cookie = '', userAgent = '', showLogo = true) {
   const args = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -202,28 +204,30 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       finalClip = { x: 0, y: 0, width: 840, height: 800 }
     }
 
-    // 在截图区域底部添加 logo
-    await page.evaluate((clip, logoH) => {
-      const logo = document.createElement('div')
-      logo.id = 'linuxdo-plugin-logo'
-      logo.style.cssText = `
-        position: absolute;
-        left: ${clip.x}px;
-        top: ${clip.y + clip.height}px;
-        width: ${clip.width}px;
-        height: ${logoH}px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        color: #888;
-        background: linear-gradient(to right, #f8f9fa, #e9ecef, #f8f9fa);
-        border-top: 1px solid #dee2e6;
-        z-index: 99999;
-      `
-      logo.textContent = 'TRSS yunzai & linuxdo-plugin by 冰凉到通透'
-      document.body.appendChild(logo)
-    }, finalClip, logoHeight)
+    // 在截图区域底部添加 logo（如果启用）
+    if (showLogo) {
+      await page.evaluate((clip, logoH) => {
+        const logo = document.createElement('div')
+        logo.id = 'linuxdo-plugin-logo'
+        logo.style.cssText = `
+          position: absolute;
+          left: ${clip.x}px;
+          top: ${clip.y + clip.height}px;
+          width: ${clip.width}px;
+          height: ${logoH}px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          color: #888;
+          background: linear-gradient(to right, #f8f9fa, #e9ecef, #f8f9fa);
+          border-top: 1px solid #dee2e6;
+          z-index: 99999;
+        `
+        logo.textContent = 'TRSS yunzai & linuxdo-plugin'
+        document.body.appendChild(logo)
+      }, finalClip, logoHeight)
+    }
 
     // 截图前再次移除水印
     await page.evaluate(() => {
@@ -242,14 +246,14 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       })
     })
 
-    // 截图（包含 logo）
+    // 截图（根据配置决定是否包含 logo）
     const screenshot = await page.screenshot({
       type: 'png',
       clip: {
         x: finalClip.x,
         y: finalClip.y,
         width: finalClip.width,
-        height: finalClip.height + logoHeight
+        height: finalClip.height + (showLogo ? logoHeight : 0)
       }
     })
 

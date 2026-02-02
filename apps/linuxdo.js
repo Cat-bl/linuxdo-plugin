@@ -365,7 +365,7 @@ export default class LinuxDoApp extends plugin {
       try {
         this.reply(`正在获取帖子 ${topicId} 内容，请稍候...`)
         const url = `https://linux.do/t/topic/${topicId}`
-        const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
+        const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent, this.config.showLogo ?? true)
         const pubTime = pubDate ? formatTime(pubDate) : ''
 
         const msg = [
@@ -422,7 +422,7 @@ export default class LinuxDoApp extends plugin {
       }
 
       const item = items[0]
-      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, this.config.proxy, this.config.cookie, this.config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, this.config.proxy, this.config.cookie, this.config.userAgent, this.config.showLogo ?? true)
       const pubTime = formatTime(item.pubDate)
       const msg = [
         segment.image(imgBuffer),
@@ -665,7 +665,7 @@ export default class LinuxDoApp extends plugin {
 
     // 截图并构建消息
     try {
-      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, config.proxy, config.cookie, config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, files } = await screenshotPost(item.link, config.proxy, config.cookie, config.userAgent, config.showLogo ?? true)
       const pubTime = formatTime(item.pubDate)
 
       const msg = [
@@ -937,7 +937,7 @@ export default class LinuxDoApp extends plugin {
 
     try {
       this.reply('检测到Linux.do社区帖子,正在解析 ...')
-      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent)
+      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent, this.config.showLogo ?? true)
       const pubTime = pubDate ? formatTime(pubDate) : ''
 
       const msg = [
