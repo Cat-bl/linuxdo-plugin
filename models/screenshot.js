@@ -10,9 +10,10 @@ import puppeteer from 'puppeteer'
  * @param {string} cookie Linux.do 的 _t cookie 值
  * @param {string} userAgent User-Agent
  * @param {boolean} showLogo 是否显示底部 logo
+ * @param {string} browserPath 浏览器可执行文件路径（用系统新版 Edge/Chrome 截图，避免自带 Chromium 过旧导致布局错乱）
  * @returns {Promise<{screenshot: Buffer, cdkUrl: string|null}>} 图片 Buffer 和 CDK 链接
  */
-export async function screenshotPost(url, proxy = null, cookie = '', userAgent = '', showLogo = true) {
+export async function screenshotPost(url, proxy = null, cookie = '', userAgent = '', showLogo = true, browserPath = '') {
   const args = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -25,10 +26,16 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     args.push(`--proxy-server=http://${proxy.host}:${proxy.port}`)
   }
 
-  const browser = await puppeteer.launch({
+  const launchOptions = {
     headless: 'new',
     args
-  })
+  }
+  // 指定浏览器路径时，用系统浏览器（新内核支持容器查询，布局正常）
+  if (browserPath) {
+    launchOptions.executablePath = browserPath
+  }
+
+  const browser = await puppeteer.launch(launchOptions)
 
   try {
     const page = await browser.newPage()
@@ -55,7 +62,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     }
 
     await page.setViewport({
-      width: 1100,
+      width: 800,
       height: 6000,
       deviceScaleFactor: 2
     })
@@ -225,7 +232,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
         height: clipArea.height
       }
     } else {
-      finalClip = { x: 0, y: 0, width: 1100, height: 800 }
+      finalClip = { x: 0, y: 0, width: 840, height: 800 }
     }
 
     // 在截图区域底部添加 logo（如果启用）

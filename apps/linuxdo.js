@@ -203,7 +203,7 @@ export default class LinuxDoApp extends plugin {
 
     try {
       this.reply('检测到Linux.do社区帖子,正在解析 ...')
-      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent, this.config.showLogo ?? true)
+      const { screenshot: imgBuffer, cdkUrl, title, creator, pubDate, files } = await screenshotPost(url, this.config.proxy, this.config.cookie, this.config.userAgent, this.config.showLogo ?? true, this.config.autoCookie?.browserPath || '')
       const pubTime = pubDate ? formatTime(pubDate) : ''
 
       const msg = [
