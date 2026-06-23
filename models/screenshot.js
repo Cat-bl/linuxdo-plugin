@@ -144,6 +144,34 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
           visibility: hidden !important;
           opacity: 0 !important;
         }
+
+        /* 修正用户名头像布局 - 防止隐藏元素后错位 */
+        .topic-post article.boxed {
+          display: flex !important;
+          flex-direction: column !important;
+        }
+        .topic-post .topic-meta-data {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+        }
+        .topic-post .names {
+          display: flex !important;
+          align-items: center !important;
+          margin-right: auto !important;
+        }
+        .topic-post .poster-avatar {
+          margin-right: 10px !important;
+        }
+        .topic-post .post-info {
+          display: flex !important;
+          align-items: center !important;
+          gap: 8px !important;
+        }
+        /* 右侧按钮区域不挤到最右 */
+        .topic-post .actions {
+          margin-left: 0 !important;
+        }
       `
       document.head.appendChild(styleEl)
 
