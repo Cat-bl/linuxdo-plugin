@@ -6,7 +6,6 @@ import puppeteer from 'puppeteer'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
-import YAML from 'yaml'
 
 const PLUGIN_PATH = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1'))
 const DATA_PATH = path.join(PLUGIN_PATH, '..', 'data')
@@ -257,131 +256,38 @@ async function isLoggedIn(page) {
 }
 
 /**
- * 自动登录
+ * 提示主人手动登录
+ * linux.do 登录已加入图像识别人机验证，无法自动登录，
+ * 检测到登录失效时恢复浏览器窗口并通知主人手动登录。
  * @param {Object} page Puppeteer 页面对象
- * @param {string} username 用户名或邮箱
- * @param {string} password 密码
  */
-async function autoLogin(page, username, password) {
-  let client = null
-  let windowId = null
-
+async function notifyManualLogin(page) {
   try {
-    logger.info('[linuxdo-plugin] 开始自动登录...')
-
-    // 创建 CDP session，用于控制窗口状态
-    client = await page.target().createCDPSession()
-    const windowInfo = await client.send('Browser.getWindowForTarget')
-    windowId = windowInfo.windowId
-
-    // 从最小化状态恢复窗口
-    logger.info('[linuxdo-plugin] 恢复浏览器窗口...')
-    await client.send('Browser.setWindowBounds', {
-      windowId,
-      bounds: { windowState: 'normal' }
-    })
-    await new Promise(r => setTimeout(r, 500))
-
-    const currentUrl = page.url()
-
-    // 如果已经在登录页面，直接填写表单
-    if (currentUrl.includes('/login')) {
-      logger.info('[linuxdo-plugin] 已在登录页面，直接填写表单')
-    } else {
-      // 先跳转到首页
-      await page.goto('https://linux.do/', { waitUntil: 'domcontentloaded', timeout: 60000 })
-      await new Promise(r => setTimeout(r, 3000))
-
-      // 检测人机验证
-      const passed = await handleCloudflareTurnstile(page)
-      if (passed) {
-        await new Promise(r => setTimeout(r, 5000))
-      }
-
-      // 点击登录按钮
-      const loginBtn = await page.$('.login-button, .header-buttons .btn-primary')
-      if (!loginBtn) {
-        logger.warn('[linuxdo-plugin] 未找到登录按钮')
-        return false
-      }
-      await loginBtn.click()
-    }
-
-    // 等待登录表单出现
-    await page.waitForSelector('#login-account-name', { timeout: 10000 })
-    await new Promise(r => setTimeout(r, 1000))
-
-    // 输入账号密码
-    await page.type('#login-account-name', username, { delay: 50 })
-    await page.type('#login-account-password', password, { delay: 50 })
-
-    // 点击登录按钮
-    await page.click('#login-button')
-
-    // 等待登录完成（增加等待时间）
-    logger.info('[linuxdo-plugin] 等待登录完成...')
-    await new Promise(r => setTimeout(r, 8000))
-
-    // 检查是否登录成功
-    const loggedIn = await isLoggedIn(page)
-    if (loggedIn) {
-      logger.info('[linuxdo-plugin] 自动登录成功')
-
-      // 登录成功后跳转到配置的页面
-      logger.info(`[linuxdo-plugin] 跳转到配置页面: ${DEFAULT_PAGE}`)
-      await page.goto(DEFAULT_PAGE, { waitUntil: 'domcontentloaded', timeout: 60000 })
-      await new Promise(r => setTimeout(r, 5000))
-
-      // 检测人机验证
-      const passed2 = await handleCloudflareTurnstile(page)
-      if (passed2) {
-        await new Promise(r => setTimeout(r, 5000))
-      }
-
-      // 清理多余的标签页，只保留当前页面
-      await cleanupExtraTabs(page)
-
-      return true
-    } else {
-      logger.error('[linuxdo-plugin] 自动登录失败，请检查账号密码')
-      return false
-    }
-  } catch (err) {
-    logger.error(`[linuxdo-plugin] 自动登录失败: ${err.message}`)
-    return false
-  } finally {
-    // 登录完成后最小化窗口
-    if (client && windowId) {
-      try {
-        logger.info('[linuxdo-plugin] 最小化浏览器窗口...')
-        await client.send('Browser.setWindowBounds', {
-          windowId,
-          bounds: { windowState: 'minimized' }
-        })
-      } catch (e) {
-        // 忽略最小化失败的错误
-      }
-    }
+    // 恢复浏览器窗口，方便主人手动操作
+    await setWindowState(page, 'normal')
+    // 跳转到登录页面
+    await page.goto('https://linux.do/login', { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {})
+  } catch (e) {
+    // 忽略跳转失败
   }
-}
 
-/**
- * 清理多余的标签页，只保留指定页面
- * @param {Object} keepPage 要保留的页面
- */
-async function cleanupExtraTabs(keepPage) {
-  if (!browser) return
+  const tip = '[linuxdo-plugin] 检测到 linux.do 登录已失效，且登录需要图像人机验证无法自动完成，请在已打开的浏览器窗口中手动登录，登录后使用 #linuxdo刷新cookie 更新 Cookie'
+  logger.warn(tip)
 
+  // 尝试通知主人（best-effort，失败不影响流程）
   try {
-    const pages = await browser.pages()
-    for (const page of pages) {
-      if (page !== keepPage) {
-        await page.close().catch(() => {})
-      }
+    let masters = []
+    // Yunzai 的 masterQQ 配置，路径不存在时忽略
+    const { default: cfg } = await import('../../../lib/config/config.js').catch(() => ({ default: null }))
+    if (cfg?.masterQQ) {
+      masters = Array.isArray(cfg.masterQQ) ? cfg.masterQQ : [cfg.masterQQ]
     }
-    logger.info('[linuxdo-plugin] 已清理多余标签页')
-  } catch (err) {
-    logger.error(`[linuxdo-plugin] 清理标签页失败: ${err.message}`)
+    for (const qq of masters) {
+      if (!qq || qq === 'stdin') continue
+      await Bot.pickFriend(String(qq)).sendMsg(tip).catch(() => {})
+    }
+  } catch (e) {
+    // 无法发送通知时仅记录日志
   }
 }
 
@@ -653,21 +559,10 @@ export async function refreshCookie(refresh = false) {
     // 检测登录状态
     const loggedIn = await isLoggedIn(page)
     if (!loggedIn) {
-      // 读取配置获取账号密码
-      const config = YAML.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
-      const { username, password } = config.autoCookie || {}
-
-      if (username && password) {
-        logger.info('[linuxdo-plugin] 登录状态失效，尝试自动登录...')
-        const loginSuccess = await autoLogin(page, username, password)
-        if (!loginSuccess) {
-          return false
-        }
-        logger.info('[linuxdo-plugin] 登录成功，正在获取新 Cookie...')
-      } else {
-        logger.warn('[linuxdo-plugin] 登录状态失效，但未配置账号密码')
-        return false
-      }
+      // linux.do 登录已加入图像人机验证，无法自动登录，提示主人手动登录
+      logger.warn('[linuxdo-plugin] 登录状态失效，需手动登录')
+      await notifyManualLogin(page)
+      return false
     }
 
     // 获取并更新 Cookie 和 User-Agent
