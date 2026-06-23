@@ -106,6 +106,9 @@ function formatFiles(files) {
 
 export default class LinuxDoApp extends plugin {
   constructor() {
+    // 启动时确保配置文件已生成（首次启动从 config_default 复制）
+    getConfig()
+
     super({
       name: 'LinuxDo帖子解析',
       dsc: 'Linux.do 社区帖子链接解析',
