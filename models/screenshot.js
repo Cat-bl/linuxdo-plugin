@@ -65,26 +65,27 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       deviceScaleFactor: 2
     })
 
-    // 设置超时
+    // 等待整页加载完成（含初始重定向/SPA 路由），用 load 而非 domcontentloaded，
+    // 避免页面在 domcontentloaded 后才跳转，导致后续 evaluate 撞上被销毁的上下文
     await page.goto(url, {
-      waitUntil: 'domcontentloaded',
+      waitUntil: 'load',
       timeout: 60000
     })
 
     // 等待主要内容加载
     await page.waitForSelector('.topic-body, .post-stream, #main-outlet', { timeout: 10000 }).catch(() => {})
 
-    // 页面加载后立即拦截并阻止整页导航，防止后续 evaluate 期间发生跳转销毁上下文
-    // （SPA 客户端路由是 pushState 不受影响；懒加载图片/API 等非导航请求正常放行）
-    await page.setRequestInterception(true)
-    const blockNav = interceptedRequest => {
-      if (interceptedRequest.isNavigationRequest() && interceptedRequest.frame() === page.mainFrame()) {
-        interceptedRequest.abort().catch(() => {})
-      } else {
-        interceptedRequest.continue().catch(() => {})
-      }
-    }
-    page.on('request', blockNav)
+    // 等待页面稳定（让 Ember 初始路由 / 规范化 URL 跳转先完成，再操作 DOM）
+    await new Promise(r => setTimeout(r, 3000))
+
+    // 从根上阻止页面内链接点击触发整页导航（捕获阶段 preventDefault，
+    // 不拦截网络、不 abort，避免产生错误页反而销毁上下文）
+    await page.evaluate(() => {
+      document.addEventListener('click', e => {
+        const a = e.target.closest && e.target.closest('a[href]')
+        if (a) e.preventDefault()
+      }, true)
+    })
 
     // 多次滚动页面加载评论
     await page.evaluate(async () => {
@@ -97,19 +98,17 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       await new Promise(r => setTimeout(r, 500))
     })
 
-    // 展开所有模糊/剧透内容和折叠内容
+    // 展开剧透/折叠内容（不点击链接，避免导航；图片模糊由注入的 CSS 持续去除）
     await page.evaluate(() => {
-      // 点击所有带 spoiler 的元素展开
+      // 去除剧透模糊（移除类名 + 内联样式，不触发点击）
       document.querySelectorAll('.spoiled, .spoiler-blurred, [data-spoiler-state="blurred"]').forEach(el => {
-        el.click()
+        el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
+        el.removeAttribute('data-spoiler-state')
+        el.style.filter = 'none'
       })
       // 移除图片模糊样式
       document.querySelectorAll('img').forEach(img => {
         img.style.filter = 'none'
-      })
-      // 移除 lightbox 模糊
-      document.querySelectorAll('.spoiler-blurred, .blurred').forEach(el => {
-        el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
       })
       // 展开所有 <details> 折叠内容 (Summary)
       document.querySelectorAll('details').forEach(el => {
