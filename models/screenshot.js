@@ -4,6 +4,29 @@
 import puppeteer from 'puppeteer'
 
 /**
+ * 安全执行 page.evaluate：页面若在执行期间发生导航（如 Cloudflare 自动刷新）
+ * 导致上下文销毁，则等待页面重新稳定后重试，避免整个流程崩溃
+ */
+async function safeEvaluate(page, fn, ...args) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await page.evaluate(fn, ...args)
+    } catch (e) {
+      const msg = String(e?.message || '')
+      if (msg.includes('Execution context was destroyed') || msg.includes('Cannot find context')) {
+        // 页面发生了导航，等它重新稳定后重试
+        await page.waitForSelector('.topic-post, .post-stream, #main-outlet', { timeout: 15000 }).catch(() => {})
+        await new Promise(r => setTimeout(r, 1500))
+        continue
+      }
+      throw e
+    }
+  }
+  // 最后再尝试一次，仍失败则抛出
+  return await page.evaluate(fn, ...args)
+}
+
+/**
  * 截图帖子页面
  * @param {string} url 帖子链接
  * @param {Object} proxy 代理配置
@@ -65,41 +88,57 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       deviceScaleFactor: 2
     })
 
-    // 等待整页加载完成（含初始重定向/SPA 路由），用 load 而非 domcontentloaded，
-    // 避免页面在 domcontentloaded 后才跳转，导致后续 evaluate 撞上被销毁的上下文
+    // 等待整页加载完成
     await page.goto(url, {
-      waitUntil: 'load',
+      waitUntil: 'domcontentloaded',
       timeout: 60000
     })
 
-    // 等待主要内容加载
-    await page.waitForSelector('.topic-body, .post-stream, #main-outlet', { timeout: 10000 }).catch(() => {})
+    // 等待页面稳定：轮询直到不再是 Cloudflare "稍候" 页、且帖子内容出现、URL 不再变化
+    // （Cloudflare 会在加载后自动 reload 校验 cf_clearance，必须等它彻底跑完再操作 DOM）
+    let lastUrl = ''
+    let stableCount = 0
+    for (let i = 0; i < 30; i++) {
+      await new Promise(r => setTimeout(r, 1000))
+      let title = ''
+      let curUrl = ''
+      let hasPost = false
+      try {
+        title = await page.title()
+        curUrl = page.url()
+        hasPost = await page.evaluate(() => !!document.querySelector('.topic-post'))
+      } catch {
+        // 正在导航，上下文暂时不可用，继续等
+        continue
+      }
+      const inChallenge = title.includes('稍候') || title.includes('Just a moment')
+      if (!inChallenge && hasPost && curUrl === lastUrl) {
+        stableCount++
+        if (stableCount >= 2) break  // 连续 2 秒 URL 未变且内容就绪，判定稳定
+      } else {
+        stableCount = 0
+      }
+      lastUrl = curUrl
+    }
 
-    // 等待页面稳定（让 Ember 初始路由 / 规范化 URL 跳转先完成，再操作 DOM）
-    await new Promise(r => setTimeout(r, 3000))
-
-    // 从根上阻止页面内链接点击触发整页导航（捕获阶段 preventDefault，
-    // 不拦截网络、不 abort，避免产生错误页反而销毁上下文）
-    await page.evaluate(() => {
+    // 从根上阻止页面内链接点击触发整页导航（捕获阶段 preventDefault）
+    await safeEvaluate(page, () => {
       document.addEventListener('click', e => {
         const a = e.target.closest && e.target.closest('a[href]')
         if (a) e.preventDefault()
       }, true)
     })
 
-    // 多次滚动页面加载评论
-    await page.evaluate(async () => {
-      for (let i = 0; i < 6; i++) {
-        window.scrollBy(0, 1000)
-        await new Promise(r => setTimeout(r, 800))
-      }
-      // 回到顶部
-      window.scrollTo(0, 0)
-      await new Promise(r => setTimeout(r, 500))
-    })
+    // 分多次滚动加载评论（由 Node 驱动，每步是短 evaluate，避免长时间占用上下文撞上导航）
+    for (let i = 0; i < 6; i++) {
+      await safeEvaluate(page, () => window.scrollBy(0, 1000))
+      await new Promise(r => setTimeout(r, 800))
+    }
+    await safeEvaluate(page, () => window.scrollTo(0, 0))
+    await new Promise(r => setTimeout(r, 500))
 
     // 展开剧透/折叠内容（不点击链接，避免导航；图片模糊由注入的 CSS 持续去除）
-    await page.evaluate(() => {
+    await safeEvaluate(page, () => {
       // 去除剧透模糊（移除类名 + 内联样式，不触发点击）
       document.querySelectorAll('.spoiled, .spoiler-blurred, [data-spoiler-state="blurred"]').forEach(el => {
         el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
@@ -121,7 +160,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     await new Promise(r => setTimeout(r, 5000))
 
     // 隐藏不需要的元素
-    await page.evaluate(() => {
+    await safeEvaluate(page, () => {
       // 隐藏顶部横幅
       const banner = document.querySelector('.custom-banner, .global-notice')
       if (banner) banner.style.display = 'none'
@@ -254,7 +293,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     })
 
     // 截图前再次展开剧透/折叠并去模糊（处理等待期间懒加载进来的图片）
-    await page.evaluate(() => {
+    await safeEvaluate(page, () => {
       document.querySelectorAll('.spoiled, .spoiler-blurred, [data-spoiler-state="blurred"]').forEach(el => {
         el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
         el.removeAttribute('data-spoiler-state')
@@ -270,7 +309,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     await new Promise(r => setTimeout(r, 300))
 
     // 计算主帖 + 5条评论的区域
-    const clipArea = await page.evaluate(() => {
+    const clipArea = await safeEvaluate(page, () => {
       const posts = document.querySelectorAll('.topic-post')
       if (posts.length === 0) return null
 
@@ -319,7 +358,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
 
     // 在截图区域底部添加 logo（如果启用）
     if (showLogo) {
-      await page.evaluate((clip, logoH) => {
+      await safeEvaluate(page, (clip, logoH) => {
         const logo = document.createElement('div')
         logo.id = 'linuxdo-plugin-logo'
         logo.style.cssText = `
@@ -343,7 +382,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     }
 
     // 截图前再次移除水印
-    await page.evaluate(() => {
+    await safeEvaluate(page, () => {
       // 移除所有 fixed 定位的全屏覆盖层（水印特征）
       document.querySelectorAll('body > div, body > *').forEach(el => {
         const style = getComputedStyle(el)
@@ -371,7 +410,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     })
 
     // 从主帖内容中提取 CDK 链接和帖子信息
-    const postInfo = await page.evaluate(() => {
+    const postInfo = await safeEvaluate(page, () => {
       // 获取主帖内容区域
       const firstPost = document.querySelector('.topic-post .cooked, .topic-post .post-body')
       let cdkUrl = null
