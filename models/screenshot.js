@@ -80,6 +80,16 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       await new Promise(r => setTimeout(r, 500))
     })
 
+    // 阻止所有导航，避免点击 spoiler 时跳转
+    await page.setRequestInterception(true)
+    page.once('request', interceptedRequest => {
+      if (interceptedRequest.isNavigationRequest() && interceptedRequest.frame() === page.mainFrame()) {
+        interceptedRequest.abort()
+      } else {
+        interceptedRequest.continue()
+      }
+    })
+
     // 展开所有模糊/剧透内容和折叠内容
     await page.evaluate(() => {
       // 点击所有带 spoiler 的元素展开
@@ -100,6 +110,9 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       })
     })
     await new Promise(r => setTimeout(r, 500))
+
+    // 关闭请求拦截
+    await page.setRequestInterception(false)
 
     // 额外等待渲染
     await new Promise(r => setTimeout(r, 5000))
