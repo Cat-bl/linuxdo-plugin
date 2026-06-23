@@ -17,7 +17,12 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--disable-dev-shm-usage',
-    '--disable-blink-features=AutomationControlled'
+    '--disable-blink-features=AutomationControlled',
+    // linux.do(Discourse) 帖子布局依赖 CSS 容器查询(@container)，
+    // puppeteer 自带的旧版 Chromium 默认不支持，会丢弃这些规则导致布局错乱，
+    // 用 flag 强制开启容器查询及实验性 Web 特性
+    '--enable-blink-features=CSSContainerQueries',
+    '--enable-experimental-web-platform-features'
   ]
 
   // 配置代理
