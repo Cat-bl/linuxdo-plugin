@@ -3,9 +3,10 @@ import fs from 'fs'
 import path from 'path'
 import YAML from 'yaml'
 import LinuxDoApp from './apps/linuxdo.js'
+import { LinuxDoUpdate } from './apps/update.js'
 import { initAutoCookie, refreshCookie } from './models/cookie.js'
 
-const apps = { LinuxDoApp }
+const apps = { LinuxDoApp, LinuxDoUpdate }
 
 logger.info(chalk.rgb(100, 200, 100)(`[linuxdo-plugin] Linux.do 订阅推送插件加载完成`))
 
