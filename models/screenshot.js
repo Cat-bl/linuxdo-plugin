@@ -55,7 +55,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     }
 
     await page.setViewport({
-      width: 800,
+      width: 1100,
       height: 6000,
       deviceScaleFactor: 2
     })
@@ -147,6 +147,17 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       const lastVisit = document.querySelector('.topic-post-visited-line, .post-stream .topic-post-visited')
       if (lastVisit) lastVisit.style.display = 'none'
 
+      // 移除弹窗（error/403 等对话框）和遮罩层
+      document.querySelectorAll(
+        '.modal, .modal-backdrop, .d-modal, .modal-container, ' +
+        '#dialog-holder, .dialog-container, .dialog-overlay, .dialog-content, ' +
+        '.bootbox, .fade.in, .ember-modal-wrapper, .modal-overlay'
+      ).forEach(el => el.remove())
+
+      // 移除 body 上因弹窗添加的滚动锁定样式
+      document.body.classList.remove('modal-open', 'dialog-open')
+      document.body.style.overflow = ''
+
       // 隐藏用户名水印 - 注入 CSS 强制隐藏
       const styleEl = document.createElement('style')
       styleEl.textContent = `
@@ -156,34 +167,6 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
           display: none !important;
           visibility: hidden !important;
           opacity: 0 !important;
-        }
-
-        /* 修正用户名头像布局 - 防止隐藏元素后错位 */
-        .topic-post article.boxed {
-          display: flex !important;
-          flex-direction: column !important;
-        }
-        .topic-post .topic-meta-data {
-          display: flex !important;
-          align-items: center !important;
-          justify-content: space-between !important;
-        }
-        .topic-post .names {
-          display: flex !important;
-          align-items: center !important;
-          margin-right: auto !important;
-        }
-        .topic-post .poster-avatar {
-          margin-right: 10px !important;
-        }
-        .topic-post .post-info {
-          display: flex !important;
-          align-items: center !important;
-          gap: 8px !important;
-        }
-        /* 右侧按钮区域不挤到最右 */
-        .topic-post .actions {
-          margin-left: 0 !important;
         }
       `
       document.head.appendChild(styleEl)
@@ -242,7 +225,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
         height: clipArea.height
       }
     } else {
-      finalClip = { x: 0, y: 0, width: 840, height: 800 }
+      finalClip = { x: 0, y: 0, width: 1100, height: 800 }
     }
 
     // 在截图区域底部添加 logo（如果启用）
