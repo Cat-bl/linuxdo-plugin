@@ -74,6 +74,18 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     // 等待主要内容加载
     await page.waitForSelector('.topic-body, .post-stream, #main-outlet', { timeout: 10000 }).catch(() => {})
 
+    // 页面加载后立即拦截并阻止整页导航，防止后续 evaluate 期间发生跳转销毁上下文
+    // （SPA 客户端路由是 pushState 不受影响；懒加载图片/API 等非导航请求正常放行）
+    await page.setRequestInterception(true)
+    const blockNav = interceptedRequest => {
+      if (interceptedRequest.isNavigationRequest() && interceptedRequest.frame() === page.mainFrame()) {
+        interceptedRequest.abort().catch(() => {})
+      } else {
+        interceptedRequest.continue().catch(() => {})
+      }
+    }
+    page.on('request', blockNav)
+
     // 多次滚动页面加载评论
     await page.evaluate(async () => {
       for (let i = 0; i < 6; i++) {
@@ -84,17 +96,6 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       window.scrollTo(0, 0)
       await new Promise(r => setTimeout(r, 500))
     })
-
-    // 阻止主框架导航，避免点击 spoiler 时跳转（其他请求正常放行）
-    await page.setRequestInterception(true)
-    const blockNav = interceptedRequest => {
-      if (interceptedRequest.isNavigationRequest() && interceptedRequest.frame() === page.mainFrame()) {
-        interceptedRequest.abort().catch(() => {})
-      } else {
-        interceptedRequest.continue().catch(() => {})
-      }
-    }
-    page.on('request', blockNav)
 
     // 展开所有模糊/剧透内容和折叠内容
     await page.evaluate(() => {
@@ -116,10 +117,6 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       })
     })
     await new Promise(r => setTimeout(r, 500))
-
-    // 关闭请求拦截，移除监听器
-    page.off('request', blockNav)
-    await page.setRequestInterception(false)
 
     // 额外等待渲染
     await new Promise(r => setTimeout(r, 5000))
