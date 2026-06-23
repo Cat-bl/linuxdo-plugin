@@ -165,7 +165,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       document.body.classList.remove('modal-open', 'dialog-open')
       document.body.style.overflow = ''
 
-      // 隐藏用户名水印 - 注入 CSS 强制隐藏
+      // 隐藏用户名水印 + 修正帖子布局（容器查询不生效时用扁平 CSS 兜底）
       const styleEl = document.createElement('style')
       styleEl.textContent = `
         div[style*="position: fixed"][style*="z-index: 999999"][style*="pointer-events: none"],
@@ -174,6 +174,42 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
           display: none !important;
           visibility: hidden !important;
           opacity: 0 !important;
+        }
+
+        /* 头像列与正文横向排列（替代失效的 @container 布局） */
+        .topic-post .post__row {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: flex-start !important;
+        }
+        .topic-post .topic-avatar {
+          flex: 0 0 auto !important;
+        }
+        .topic-post .post__body,
+        .topic-post .topic-body {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+        }
+        /* 头像角标(flair)定位回头像右下角 */
+        .topic-post .post-avatar {
+          position: relative !important;
+        }
+        .topic-post .avatar-flair {
+          position: absolute !important;
+          bottom: 0 !important;
+          right: 0 !important;
+          top: auto !important;
+          left: auto !important;
+        }
+        /* 用户名与时间同一行 */
+        .topic-post .topic-meta-data {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          flex-wrap: nowrap !important;
+        }
+        .topic-post .topic-meta-data .names {
+          margin-right: auto !important;
         }
       `
       document.head.appendChild(styleEl)
