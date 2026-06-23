@@ -80,15 +80,16 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
       await new Promise(r => setTimeout(r, 500))
     })
 
-    // 阻止所有导航，避免点击 spoiler 时跳转
+    // 阻止主框架导航，避免点击 spoiler 时跳转（其他请求正常放行）
     await page.setRequestInterception(true)
-    page.once('request', interceptedRequest => {
+    const blockNav = interceptedRequest => {
       if (interceptedRequest.isNavigationRequest() && interceptedRequest.frame() === page.mainFrame()) {
-        interceptedRequest.abort()
+        interceptedRequest.abort().catch(() => {})
       } else {
-        interceptedRequest.continue()
+        interceptedRequest.continue().catch(() => {})
       }
-    })
+    }
+    page.on('request', blockNav)
 
     // 展开所有模糊/剧透内容和折叠内容
     await page.evaluate(() => {
@@ -111,7 +112,8 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     })
     await new Promise(r => setTimeout(r, 500))
 
-    // 关闭请求拦截
+    // 关闭请求拦截，移除监听器
+    page.off('request', blockNav)
     await page.setRequestInterception(false)
 
     // 额外等待渲染
