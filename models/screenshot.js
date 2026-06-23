@@ -207,9 +207,43 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
           flex-direction: row !important;
           align-items: center !important;
           flex-wrap: nowrap !important;
+          margin-bottom: 12px !important;
         }
         .topic-post .topic-meta-data .names {
           margin-right: auto !important;
+        }
+        /* 增加间距，避免布局过于拥挤 */
+        .topic-post .post__row {
+          padding: 14px 0 !important;
+          column-gap: 14px !important;
+        }
+        .topic-post .topic-avatar {
+          padding-right: 4px !important;
+        }
+        .topic-post .cooked {
+          line-height: 1.6 !important;
+          margin-bottom: 10px !important;
+        }
+        .topic-post .cooked p {
+          margin: 0 0 10px 0 !important;
+        }
+        .topic-post .post-menu-area,
+        .topic-post .post__actions,
+        .topic-post .actions {
+          margin-top: 8px !important;
+        }
+        /* 持续去除图片/剧透模糊（对懒加载后才出现的图片同样生效） */
+        .topic-post img,
+        .topic-post .cooked img,
+        .lightbox-wrapper img {
+          filter: none !important;
+        }
+        .spoiled, .spoiler-blurred, .blurred,
+        [data-spoiler-state="blurred"] {
+          filter: none !important;
+        }
+        .spoiler-blurred, .blurred, .spoiled {
+          opacity: 1 !important;
         }
       `
       document.head.appendChild(styleEl)
@@ -222,6 +256,22 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
         }
       })
     })
+
+    // 截图前再次展开剧透/折叠并去模糊（处理等待期间懒加载进来的图片）
+    await page.evaluate(() => {
+      document.querySelectorAll('.spoiled, .spoiler-blurred, [data-spoiler-state="blurred"]').forEach(el => {
+        el.classList.remove('spoiler-blurred', 'blurred', 'spoiled')
+        el.removeAttribute('data-spoiler-state')
+        el.style.filter = 'none'
+      })
+      document.querySelectorAll('img').forEach(img => {
+        img.style.filter = 'none'
+      })
+      document.querySelectorAll('details').forEach(el => {
+        el.setAttribute('open', '')
+      })
+    })
+    await new Promise(r => setTimeout(r, 300))
 
     // 计算主帖 + 5条评论的区域
     const clipArea = await page.evaluate(() => {
