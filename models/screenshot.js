@@ -83,7 +83,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
     }
 
     await page.setViewport({
-      width: 800,
+      width: 1000,
       height: 6000,
       deviceScaleFactor: 2
     })
@@ -353,7 +353,7 @@ export async function screenshotPost(url, proxy = null, cookie = '', userAgent =
         height: clipArea.height
       }
     } else {
-      finalClip = { x: 0, y: 0, width: 840, height: 800 }
+      finalClip = { x: 0, y: 0, width: 1040, height: 800 }
     }
 
     // 在截图区域底部添加 logo（如果启用）
